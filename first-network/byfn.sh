@@ -508,7 +508,7 @@ COMPOSE_FILE_CA=docker-compose-ca.yaml
 # use golang as the default language for chaincode
 LANGUAGE=golang
 # default image tag
-IMAGETAG="latest"
+IMAGETAG="1.4.2"
 # default consensus type
 CONSENSUS_TYPE="solo"
 # Parse commandline args
@@ -558,7 +558,8 @@ while getopts "h?c:t:d:f:s:l:i:o:anv" opt; do
     LANGUAGE=$OPTARG
     ;;
   i)
-    IMAGETAG=$(go env GOARCH)"-"$OPTARG
+    #IMAGETAG=$(go env GOARCH)"-"$OPTARG
+    echo "only support fabric v1.4.2"
     ;;
   o)
     CONSENSUS_TYPE=$OPTARG
