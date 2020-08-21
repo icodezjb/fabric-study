@@ -1,6 +1,8 @@
 package client
 
 import (
+	"bytes"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fab/ccpackager/gopackager"
+	"github.com/hyperledger/fabric-sdk-go/pkg/util/protolator"
 	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/common/cauthdsl"
 	"github.com/pkg/errors"
 )
@@ -170,4 +173,35 @@ func (c *Client) UpgradeChainCode(version, peer string) error {
 
 	log.Printf("Upgrade chaincode tx: %s", resp.TransactionID)
 	return nil
+}
+
+func (c *Client) QueryBlock(blockNum uint64) {
+	block, err := c.lc.QueryBlock(blockNum)
+	if err != nil {
+		log.Fatalln("QueryBlock err:", err)
+	}
+
+	ParseBlock(block)
+}
+
+func (c *Client) QueryChainInfo() {
+	chainInfo, err := c.lc.QueryInfo()
+	if err != nil {
+		log.Fatalln("QueryChainInfo err:", err)
+	}
+
+	log.Println(chainInfo)
+}
+
+func ParseBlock(block *common.Block) {
+	buf := make([]byte, 1024)
+	rw := bytes.NewBuffer(buf)
+
+	if err := protolator.DeepMarshalJSON(rw, block); err != nil {
+		log.Fatalln("DeepMarshalJSON err:", err)
+	}
+
+	jsonData, _ := ioutil.ReadAll(rw)
+
+	log.Println(string(bytes.ReplaceAll(jsonData, []byte("\t"), []byte(" "))))
 }

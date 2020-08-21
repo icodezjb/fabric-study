@@ -7,6 +7,7 @@ import (
 	"github.com/icodezjb/fabric-study/utils"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/ledger"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
@@ -23,6 +24,7 @@ type Client struct {
 	SDK *fabsdk.FabricSDK
 	rc  *resmgmt.Client
 	cc  *channel.Client
+	lc  *ledger.Client
 
 	ChannelID       string
 	ChainCodeID     string
@@ -65,9 +67,11 @@ func (c *Client) initialize() {
 			log.Fatalln("initialize fatal:", r)
 		}
 	}()
+
 	c.initializeSDK()
 	c.initializeResourceClient()
-	c.initializeChannelCtx()
+	c.initializeChannelClient()
+	c.initializeLedgerClient()
 }
 
 func (c *Client) initializeSDK() {
@@ -93,7 +97,7 @@ func (c *Client) initializeResourceClient() {
 	c.rc = rc
 }
 
-func (c *Client) initializeChannelCtx() {
+func (c *Client) initializeChannelClient() {
 	channelProvider := c.SDK.ChannelContext(c.ChannelID, fabsdk.WithUser(c.OrgUser))
 
 	cc, err := channel.New(channelProvider)
@@ -104,6 +108,18 @@ func (c *Client) initializeChannelCtx() {
 	log.Println("Initialized channel client")
 
 	c.cc = cc
+}
+
+func (c *Client) initializeLedgerClient() {
+	channelProvider := c.SDK.ChannelContext(c.ChannelID, fabsdk.WithUser(c.OrgUser))
+	lc, err := ledger.New(channelProvider)
+	if err != nil {
+		log.Fatalln("ledger.New err:", err)
+	}
+
+	log.Println("Initialized ledger client")
+
+	c.lc = lc
 }
 
 func (c *Client) Close() {
