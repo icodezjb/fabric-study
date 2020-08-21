@@ -2,10 +2,13 @@ package client
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
+
+	"github.com/icodezjb/fabric-study/utils"
 
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
@@ -14,7 +17,6 @@ import (
 	"github.com/hyperledger/fabric-sdk-go/pkg/fab/ccpackager/gopackager"
 	"github.com/hyperledger/fabric-sdk-go/pkg/util/protolator"
 	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/common/cauthdsl"
-	"github.com/pkg/errors"
 )
 
 func (c *Client) InstallChainCode(verion, peer string) error {
@@ -23,7 +25,7 @@ func (c *Client) InstallChainCode(verion, peer string) error {
 	// pack the chaincode
 	chaincodePack, err := gopackager.NewCCPackage(c.ChainCodePath, c.ChainCodeGoPath)
 	if err != nil {
-		return errors.WithMessage(err, "pack chaincode error")
+		return err
 	}
 
 	// installing chaincode request
@@ -36,14 +38,14 @@ func (c *Client) InstallChainCode(verion, peer string) error {
 
 	resps, err := c.rc.InstallCC(req, targetPeers)
 	if err != nil {
-		return errors.WithMessage(err, "install chaincode err")
+		return err
 	}
 
 	// check other errors
 	var errs []error
 	for _, resp := range resps {
 		if resp.Info == "already installed" {
-			log.Printf("chaincode %s-%s already installed on peer: %s\n", c.ChainCodeID, verion, peer)
+			fmt.Printf("chaincode %s-%s already installed on peer: %s\n", c.ChainCodeID, verion, peer)
 			return nil
 		}
 
@@ -53,10 +55,10 @@ func (c *Client) InstallChainCode(verion, peer string) error {
 	}
 
 	if len(errs) > 0 {
-		return errors.WithMessage(errs[0], "install chaincode first error")
+		err = errors.New("install chaincode error")
 	}
 
-	return nil
+	return err
 }
 
 func (c *Client) genPolicy(policy string) (*common.SignaturePolicyEnvelope, error) {
@@ -72,7 +74,7 @@ func (c *Client) InstantiateChainCode(version, peer string) (txid fab.Transactio
 	Org1OrOrg2 := "OR('Org1MSP.member','Org2MSP.member')"
 	chaincodePolicy, err := c.genPolicy(Org1OrOrg2)
 	if err != nil {
-		return "", errors.WithMessage(err, "gen policy error")
+		return "", err
 	}
 
 	req := resmgmt.InstantiateCCRequest{
@@ -88,12 +90,12 @@ func (c *Client) InstantiateChainCode(version, peer string) (txid fab.Transactio
 
 	switch {
 	case err == nil:
-		log.Println("Instantiated chaincode tx:", resp.TransactionID)
+		fmt.Println("Instantiated chaincode tx:", resp.TransactionID)
 		txid = resp.TransactionID
 	case strings.Contains(err.Error(), "already exists"):
 		err = nil
 	default:
-		err = errors.WithMessage(err, "instantiate chaincode error")
+
 	}
 
 	return txid, err
@@ -109,7 +111,7 @@ func (c *Client) InvokeChainCode(peers []string) (fab.TransactionID, error) {
 	targetPeers := channel.WithTargetEndpoints(peers...)
 	resp, err := c.cc.Execute(req, targetPeers)
 	if err != nil {
-		return "", errors.WithMessage(err, "invoke chaincode error")
+		return "", err
 	}
 
 	return resp.TransactionID, nil
@@ -125,7 +127,7 @@ func (c *Client) InvokeChainCodeDelete(peers []string) (fab.TransactionID, error
 	targetPeers := channel.WithTargetEndpoints(peers...)
 	resp, err := c.cc.Execute(req, targetPeers)
 	if err != nil {
-		return "", errors.WithMessage(err, "delete chaincode error")
+		return "", err
 	}
 
 	return resp.TransactionID, nil
@@ -141,10 +143,10 @@ func (c *Client) QueryChainCode(peer, keys string) error {
 	targetPeers := channel.WithTargetEndpoints(peer)
 	resp, err := c.cc.Execute(req, targetPeers)
 	if err != nil {
-		return errors.WithMessage(err, "query chaincode error")
+		return err
 	}
 
-	log.Printf("Query chaincode tx response:\ntx: %s\nresult: %v\n\n", resp.TransactionID, string(resp.Payload))
+	fmt.Printf("Query chaincode tx response:\ntx: %s\nresult: %v\n\n", resp.TransactionID, string(resp.Payload))
 
 	return nil
 }
@@ -154,7 +156,7 @@ func (c *Client) UpgradeChainCode(version, peer string) error {
 	org1AndOrg2 := "AND('Org1MSP.member','Org2MSP.member')"
 	chaincodePolicy, err := c.genPolicy(org1AndOrg2)
 	if err != nil {
-		return errors.WithMessage(err, "gen policy from string")
+		return err
 	}
 
 	req := resmgmt.UpgradeCCRequest{
@@ -168,40 +170,40 @@ func (c *Client) UpgradeChainCode(version, peer string) error {
 	targetPeers := resmgmt.WithTargetEndpoints(peer)
 	resp, err := c.rc.UpgradeCC(c.ChainCodeID, req, targetPeers)
 	if err != nil {
-		return errors.WithMessage(err, "Upgrade chaincode error")
+		return err
 	}
 
-	log.Printf("Upgrade chaincode tx: %s", resp.TransactionID)
+	fmt.Printf("Upgrade chaincode tx: %s", resp.TransactionID)
 	return nil
 }
 
 func (c *Client) QueryBlock(blockNum uint64) {
 	block, err := c.lc.QueryBlock(blockNum)
 	if err != nil {
-		log.Fatalln("QueryBlock err:", err)
+		utils.Fatalf("QueryBlock err: %v", err)
 	}
 
-	ParseBlock(block)
+	PrintBlock(block)
 }
 
 func (c *Client) QueryChainInfo() {
 	chainInfo, err := c.lc.QueryInfo()
 	if err != nil {
-		log.Fatalln("QueryChainInfo err:", err)
+		utils.Fatalf("QueryChainInfo err: %v", err)
 	}
 
-	log.Println(chainInfo)
+	fmt.Println(chainInfo)
 }
 
-func ParseBlock(block *common.Block) {
+func PrintBlock(block *common.Block) {
 	buf := make([]byte, 1024)
 	rw := bytes.NewBuffer(buf)
 
 	if err := protolator.DeepMarshalJSON(rw, block); err != nil {
-		log.Fatalln("DeepMarshalJSON err:", err)
+		utils.Fatalf("DeepMarshalJSON err: %v", err)
 	}
 
 	jsonData, _ := ioutil.ReadAll(rw)
 
-	log.Println(string(bytes.ReplaceAll(jsonData, []byte("\t"), []byte(" "))))
+	fmt.Println(string(bytes.ReplaceAll(jsonData, []byte("\t"), []byte(" "))))
 }

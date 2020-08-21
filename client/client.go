@@ -1,7 +1,7 @@
 package client
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/icodezjb/fabric-study/utils"
@@ -64,7 +64,7 @@ func New(cfg, orgName, orgAdmin, orgUser string) *Client {
 func (c *Client) initialize() {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Fatalln("initialize fatal:", r)
+			utils.Fatalf("initialize fatal: %v", r)
 		}
 	}()
 
@@ -77,10 +77,10 @@ func (c *Client) initialize() {
 func (c *Client) initializeSDK() {
 	sdk, err := fabsdk.New(config.FromRaw(utils.ReplacePathInFile(c.ConfigPath), "yaml"))
 	if err != nil {
-		log.Fatalln("fabsdk.New err:", err)
+		utils.Fatalf("fabsdk.New err: \n\n%v", err)
 	}
 
-	log.Println("Initialized fabric sdk")
+	fmt.Println("Initialized fabric sdk")
 
 	c.SDK = sdk
 }
@@ -89,10 +89,10 @@ func (c *Client) initializeResourceClient() {
 	clientProvider := c.SDK.Context(fabsdk.WithUser(c.OrgAdmin), fabsdk.WithOrg(c.OrgName))
 	rc, err := resmgmt.New(clientProvider)
 	if err != nil {
-		log.Fatalln("resmgmt.New err:", err)
+		utils.Fatalf("resmgmt.New err: %v", err)
 	}
 
-	log.Println("Initialized resource client")
+	fmt.Println("Initialized resource client")
 
 	c.rc = rc
 }
@@ -102,10 +102,10 @@ func (c *Client) initializeChannelClient() {
 
 	cc, err := channel.New(channelProvider)
 	if err != nil {
-		log.Fatalln("channel.New err:", err)
+		utils.Fatalf("channel.New err: %v", err)
 	}
 
-	log.Println("Initialized channel client")
+	fmt.Println("Initialized channel client")
 
 	c.cc = cc
 }
@@ -114,10 +114,10 @@ func (c *Client) initializeLedgerClient() {
 	channelProvider := c.SDK.ChannelContext(c.ChannelID, fabsdk.WithUser(c.OrgUser))
 	lc, err := ledger.New(channelProvider)
 	if err != nil {
-		log.Fatalln("ledger.New err:", err)
+		utils.Fatalf("ledger.New err: %v", err)
 	}
 
-	log.Println("Initialized ledger client")
+	fmt.Println("Initialized ledger client")
 
 	c.lc = lc
 }

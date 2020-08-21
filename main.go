@@ -1,9 +1,10 @@
 package main
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/icodezjb/fabric-study/client"
+	"github.com/icodezjb/fabric-study/utils"
 )
 
 func main() {
@@ -11,12 +12,12 @@ func main() {
 	defer c.Close()
 
 	if err := c.QueryChainCode("peer0.org1.example.com", "a"); err != nil {
-		log.Fatalln("Query chaincode error: %v", err)
+		utils.Fatalf("Query chaincode error: %v", err)
 	}
 
-	log.Println("Query chaincode success on peer0.org1")
+	fmt.Println("Query chaincode success on peer0.org1")
 
-	log.Println("Query block 1 ")
+	fmt.Println("Query block 1 ")
 
 	c.QueryBlock(1)
 }

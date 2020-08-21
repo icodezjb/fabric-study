@@ -12,7 +12,6 @@ require (
 	github.com/hyperledger/fabric-protos-go v0.0.0-20191121202242-f5500d5e3e85
 	github.com/hyperledger/fabric-sdk-go v1.0.0-beta2
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7 // indirect
-	github.com/pkg/errors v0.8.1
 	github.com/sykesm/zap-logfmt v0.0.3 // indirect
 	go.uber.org/zap v1.15.0 // indirect
 	gopkg.in/jcmturner/goidentity.v3 v3.0.0 // indirect
