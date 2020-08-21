@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/icodezjb/fabric-test/utils"
+	"github.com/icodezjb/fabric-study/utils"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
@@ -42,7 +42,7 @@ func New(cfg, orgName, orgAdmin, orgUser string) *Client {
 
 		ChannelID:       "mychannel",
 		ChainCodeID:     "mycc",
-		ChainCodePath:   "github.com/icodezjb/fabric-test/chaincode_example02/go",
+		ChainCodePath:   "github.com/icodezjb/fabric-study/chaincode_example02/go",
 		ChainCodeGoPath: os.Getenv("GOPATH"),
 
 		PackArgs: func(params []string) [][]byte {

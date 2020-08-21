@@ -1,4 +1,4 @@
-module github.com/icodezjb/fabric-test
+module github.com/icodezjb/fabric-study
 
 go 1.13
 

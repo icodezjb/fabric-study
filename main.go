@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/icodezjb/fabric-test/client"
+	"github.com/icodezjb/fabric-study/client"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 	"path"
 )
 
-const pkgName = "github.com/icodezjb/fabric-test"
+const pkgName = "github.com/icodezjb/fabric-study"
 
 // ReplacePathInFile modify the path in config.yaml, replace `/absolute/path` by path.Join(goPath, "src", pkgName)
 func ReplacePathInFile(config string) []byte {
