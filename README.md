@@ -11,4 +11,9 @@ cd first-network
 ./byfn.sh --help
 ```
 
-#### go run main.go
+#### fabric-cli
+```bash
+cd fabric-cli
+go build
+./fabric-cli chaincode query --cid mychannel --ccid mycc --args '{"Func":"query","Args":["a"]}' --peer grpcs://localhost:7051 --payload --config ../config/org1sdk-config.yaml
+```

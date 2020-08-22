@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/icodezjb/fabric-study/practice/client"
 
-	"github.com/icodezjb/fabric-study/client"
-	"github.com/icodezjb/fabric-study/utils"
+	"github.com/icodezjb/fabric-study/practice/utils"
 )
 
 func main() {

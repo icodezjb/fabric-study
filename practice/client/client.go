@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/icodezjb/fabric-study/utils"
+	"github.com/icodezjb/fabric-study/practice/utils"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/ledger"
@@ -77,7 +77,7 @@ func (c *Client) initialize() {
 func (c *Client) initializeSDK() {
 	sdk, err := fabsdk.New(config.FromRaw(utils.ReplacePathInFile(c.ConfigPath), "yaml"))
 	if err != nil {
-		utils.Fatalf("fabsdk.New err: \n\n%v", err)
+		utils.Fatalf("fabsdk.New err: %+v", err)
 	}
 
 	fmt.Println("Initialized fabric sdk")

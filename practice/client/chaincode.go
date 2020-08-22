@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/icodezjb/fabric-study/utils"
+	"github.com/icodezjb/fabric-study/practice/utils"
 
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
