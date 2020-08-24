@@ -74,6 +74,7 @@ type PickBlock struct {
 	Transactions []*PickTransaction
 }
 
+// ToFilteredBlock to collect ENDORSER_TRANSACTION and with event tx, if withEvent set true
 func ToFilteredBlock(block *common.Block, withEvent bool) (*PickBlock, error) {
 	pickBlock := &PickBlock{
 		Number: block.Header.Number,

@@ -32,7 +32,7 @@ cd fabric-cli
 
 ########### upgrade
 ./fabric-cli chaincode install --ccp=github.com/icodezjb/fabric-study/chaincode/chaincode_example02/go/ --ccid=mycc --v v1 --gopath `echo $GOPATH` --config ../config/org1sdk-config.yaml
-./fabric-cli chaincode upgrade --cid mychannel --ccp=github.com/icodezjb/fabric-study/chaincode/chaincode_example02/go/ --ccid=mycc --v v2 --args='{"Args":["init","a","100","b","100"]}' --policy "OutOf(2,'Org1MSP.member','Org2MSP.member')" --config ../config/org1sdk-config.yaml
+./fabric-cli chaincode upgrade --cid mychannel --ccp=github.com/icodezjb/fabric-study/chaincode/chaincode_example02/go/ --ccid=mycc --v v1 --args='{"Args":["init","a","100","b","100"]}' --policy "OutOf(2,'Org1MSP.member','Org2MSP.member')" --config ../config/org1sdk-config.yaml
 
 ########### instantiate
 ./fabric-cli chaincode instantiate --cid mychannel --ccp=github.com/icodezjb/fabric-study/chaincode/chaincode_example02/go/ --ccid=mycc --v v0 --args '{"Args":["init","a","100","b","100"]}' --policy "AND('Org1MSP.member','Org2MSP.member')" --config ../config/org1sdk-config.yaml

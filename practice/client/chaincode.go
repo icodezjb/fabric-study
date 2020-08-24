@@ -194,8 +194,8 @@ func (c *Client) QueryBlock(blockNum string) {
 	fmt.Printf("\nblockNum=%d\n", filteredBlock.Number)
 	fmt.Printf("ChannelID=%s", filteredBlock.ChannelID)
 	for _, tx := range filteredBlock.Transactions {
-		fmt.Printf("\n    txid = %s\n", tx.TxID)
-
+		fmt.Printf("\n    txID = %s", tx.TxID)
+		fmt.Printf("\n    chaincodeID = %s\n", tx.ChainCodeID)
 		for _, ev := range tx.Events {
 			fmt.Printf("        event = %s\n", ev.EventName)
 			fmt.Printf("        payload = %s\n", string(ev.Payload))
