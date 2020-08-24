@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/icodezjb/fabric-study/practice/utils"
@@ -140,6 +141,7 @@ func (c *Client) QueryChainCode(peer, keys string) error {
 		Args:        c.PackArgs([]string{keys}),
 	}
 
+	//targetPeers := channel.WithTargetEndpoints(peer, "peer0.org2.example.com")
 	targetPeers := channel.WithTargetEndpoints(peer)
 	resp, err := c.cc.Execute(req, targetPeers)
 	if err != nil {
@@ -177,13 +179,28 @@ func (c *Client) UpgradeChainCode(version, peer string) error {
 	return nil
 }
 
-func (c *Client) QueryBlock(blockNum uint64) {
-	block, err := c.lc.QueryBlock(blockNum)
+func (c *Client) QueryBlock(blockNum string) {
+	intNum, _ := strconv.Atoi(blockNum)
+	block, err := c.lc.QueryBlock(uint64(intNum))
 	if err != nil {
 		utils.Fatalf("QueryBlock err: %v", err)
 	}
 
-	PrintBlock(block)
+	filteredBlock, err := ToFilteredBlock(block, true)
+	if err != nil {
+		utils.Fatalf("ToFilteredBlock err: %v", err)
+	}
+
+	fmt.Printf("\nblockNum=%d\n", filteredBlock.Number)
+	fmt.Printf("ChannelID=%s", filteredBlock.ChannelID)
+	for _, tx := range filteredBlock.Transactions {
+		fmt.Printf("\n    txid = %s\n", tx.TxID)
+
+		for _, ev := range tx.Events {
+			fmt.Printf("        event = %s\n", ev.EventName)
+			fmt.Printf("        payload = %s\n", string(ev.Payload))
+		}
+	}
 }
 
 func (c *Client) QueryChainInfo() {

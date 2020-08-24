@@ -143,6 +143,11 @@ func (t *SimpleChaincode) invoke(stub shim.ChaincodeStubInterface, args []string
 		return shim.Error(err.Error())
 	}
 
+	message := fmt.Sprintf("%s transfer to %s %d", A, B, X)
+	if err := stub.SetEvent("evtTransfer", []byte(message)); err != nil {
+		return shim.Error(err.Error())
+	}
+
 	return shim.Success(nil)
 }
 

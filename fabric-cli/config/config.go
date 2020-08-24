@@ -8,7 +8,6 @@ package config
 
 import (
 	"fmt"
-	"github.com/icodezjb/fabric-study/practice/utils"
 	"strconv"
 	"time"
 
@@ -270,7 +269,7 @@ func InitConfig(flags *pflag.FlagSet) error {
 		instance.setFlags[flag.Name] = flag.Value.String()
 	})
 
-	cnfg := config.FromRaw(utils.ReplacePathInFile(opts.configFile), "yaml")
+	cnfg := config.FromFile(opts.configFile)
 
 	instance.ConfigProvider = cnfg
 
