@@ -17,9 +17,6 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.4.0
 	github.com/sykesm/zap-logfmt v0.0.3 // indirect
-	github.com/syndtr/goleveldb v1.0.0 // indirect
-	github.com/tedsuo/ifrit v0.0.0-20191009134036-9a97d0632f00 // indirect
-	github.com/willf/bitset v1.1.11 // indirect
 	go.uber.org/zap v1.15.0 // indirect
 	gopkg.in/jcmturner/goidentity.v3 v3.0.0 // indirect
 )
