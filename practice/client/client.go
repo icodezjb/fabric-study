@@ -75,7 +75,7 @@ func (c *Client) initialize() {
 }
 
 func (c *Client) initializeSDK() {
-	sdk, err := fabsdk.New(config.FromRaw(utils.ReplacePathInFile(c.ConfigPath), "yaml"))
+	sdk, err := fabsdk.New(config.FromFile(c.ConfigPath))
 	if err != nil {
 		utils.Fatalf("fabsdk.New err: %+v", err)
 	}

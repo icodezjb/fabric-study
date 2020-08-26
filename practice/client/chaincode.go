@@ -1,22 +1,16 @@
 package client
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"strconv"
 	"strings"
-
-	"github.com/icodezjb/fabric-study/practice/utils"
 
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fab/ccpackager/gopackager"
-	"github.com/hyperledger/fabric-sdk-go/pkg/util/protolator"
 	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/common/cauthdsl"
 )
 
@@ -177,50 +171,4 @@ func (c *Client) UpgradeChainCode(version, peer string) error {
 
 	fmt.Printf("Upgrade chaincode tx: %s", resp.TransactionID)
 	return nil
-}
-
-func (c *Client) QueryBlock(blockNum string) {
-	intNum, _ := strconv.Atoi(blockNum)
-	block, err := c.lc.QueryBlock(uint64(intNum))
-	if err != nil {
-		utils.Fatalf("QueryBlock err: %v", err)
-	}
-
-	filteredBlock, err := ToFilteredBlock(block, true)
-	if err != nil {
-		utils.Fatalf("ToFilteredBlock err: %v", err)
-	}
-
-	fmt.Printf("\nblockNum=%d\n", filteredBlock.Number)
-	fmt.Printf("ChannelID=%s", filteredBlock.ChannelID)
-	for _, tx := range filteredBlock.Transactions {
-		fmt.Printf("\n    txID = %s", tx.TxID)
-		fmt.Printf("\n    chaincodeID = %s\n", tx.ChainCodeID)
-		for _, ev := range tx.Events {
-			fmt.Printf("        event = %s\n", ev.EventName)
-			fmt.Printf("        payload = %s\n", string(ev.Payload))
-		}
-	}
-}
-
-func (c *Client) QueryChainInfo() {
-	chainInfo, err := c.lc.QueryInfo()
-	if err != nil {
-		utils.Fatalf("QueryChainInfo err: %v", err)
-	}
-
-	fmt.Println(chainInfo)
-}
-
-func PrintBlock(block *common.Block) {
-	buf := make([]byte, 1024)
-	rw := bytes.NewBuffer(buf)
-
-	if err := protolator.DeepMarshalJSON(rw, block); err != nil {
-		utils.Fatalf("DeepMarshalJSON err: %v", err)
-	}
-
-	jsonData, _ := ioutil.ReadAll(rw)
-
-	fmt.Println(string(bytes.ReplaceAll(jsonData, []byte("\t"), []byte(" "))))
 }
