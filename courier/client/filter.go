@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/icodezjb/fabric-study/courier/utils"
 	"github.com/icodezjb/fabric-study/log"
-	"github.com/icodezjb/fabric-study/practice/utils"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hyperledger/fabric-protos-go/common"
