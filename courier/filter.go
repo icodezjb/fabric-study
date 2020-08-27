@@ -1,4 +1,4 @@
-package client
+package courier
 
 import (
 	"fmt"
@@ -24,8 +24,7 @@ func (ta transactionActions) toFilteredActions() (*peer.FilteredTransaction_Tran
 		}
 
 		if chaincodeActionPayload.Action == nil {
-			//TODO: log.debug
-			//logger.Debugf("chaincode action, the payload action is nil, skipping")
+			log.Debug("chaincode action, the payload action is nil, skipping")
 			continue
 		}
 		propRespPayload, err := utils.GetProposalResponsePayload(chaincodeActionPayload.Action.ProposalResponsePayload)
@@ -77,7 +76,7 @@ type PrepareCrossTx struct {
 func (t *PrepareCrossTx) String() string {
 	ts := time.Unix(t.TimeStamp.Seconds, int64(t.TimeStamp.Nanos))
 	return fmt.Sprintf("TxID = %s\nChainCodeID = %s\nChannelID = %s\nNumber = %d\nTimeStamp = %s\nEventName = %s\nPayload = %v",
-		t.TxID, t.ChainCodeID, t.ChannelID, t.Number, ts, t.EventName, t.Payload)
+		t.TxID, t.ChainCodeID, t.ChannelID, t.Number, ts, t.EventName, string(t.Payload))
 }
 
 // GetPrepareCrossTxs to collect ENDORSER_TRANSACTION and with event tx, if withEvent set true
@@ -132,14 +131,12 @@ func getChannelHeaderAndData(txIndex int, number uint64, ebytes []byte) ([]byte,
 
 	env, err := utils.GetEnvelopeFromBlock(ebytes)
 	if err != nil {
-		log.Error("error GetEnvelopeFromBlock, txIndex=%d, blockNum=%d", txIndex, number)
 		return nil, nil, fmt.Errorf("error getting tx from block: %w", err)
 	}
 
 	// get the payload from the envelope
 	paload, err := utils.GetPayload(env)
 	if err != nil {
-		log.Error("error GetPayload, txIndex=%d, blockNum=%d", txIndex, number)
 		return nil, nil, fmt.Errorf("could not extract payload from envelope: %w", err)
 	}
 
@@ -183,7 +180,6 @@ func getTxEvents(preCrossTx *PrepareCrossTx, payload []byte) error {
 
 	actionsData, err := transactionActions(tx.Actions).toFilteredActions()
 	if err != nil {
-		//TODO:log.err
 		return err
 	}
 

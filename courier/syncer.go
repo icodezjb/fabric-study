@@ -1,22 +1,25 @@
-package client
+package courier
 
 import (
 	"fmt"
-	"github.com/icodezjb/fabric-study/log"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/icodezjb/fabric-study/courier/client"
+	"github.com/icodezjb/fabric-study/log"
 )
 
 const blockInterval = 2 * time.Second
 
 type blockSync struct {
 	blockNum uint64
-	client   *Client
-
-	stopCh chan struct{}
+	client   *client.Client
+	wg       sync.WaitGroup
+	stopCh   chan struct{}
 }
 
-func NewBlockSync(c *Client) *blockSync {
+func NewBlockSync(c *client.Client) *blockSync {
 	s := &blockSync{
 		// skip genesis
 		blockNum: 1,
@@ -24,16 +27,26 @@ func NewBlockSync(c *Client) *blockSync {
 		stopCh:   make(chan struct{}),
 	}
 
-	go s.SyncBlock()
-
 	return s
 }
 
-func (s *blockSync) Stop() {
-	close(s.stopCh)
+func (s *blockSync) Start() {
+	s.wg.Add(1)
+	go s.syncBlock()
+
+	log.Debug("blockSync start")
 }
 
-func (s *blockSync) SyncBlock() {
+func (s *blockSync) Stop() {
+	log.Debug("blockSync stopping")
+	close(s.stopCh)
+	s.wg.Wait()
+	log.Debug("blockSync stoped")
+}
+
+func (s *blockSync) syncBlock() {
+	defer s.wg.Done()
+
 	blockTimer := time.NewTimer(0)
 	defer blockTimer.Stop()
 
@@ -42,6 +55,7 @@ func (s *blockSync) SyncBlock() {
 		case strings.Contains(err.Error(), "error Entry not found in index"):
 			blockTimer.Reset(blockInterval)
 		case strings.Contains(err.Error(), "ignore"):
+			log.Debug("sync %v", err)
 			s.blockNum++
 			blockTimer.Reset(blockInterval)
 		default:
@@ -53,7 +67,7 @@ func (s *blockSync) SyncBlock() {
 		select {
 		case <-blockTimer.C:
 			log.Debug("sync block #%d", s.blockNum)
-			block, err := s.client.lc.QueryBlock(s.blockNum)
+			block, err := s.client.QueryBlockByNum(s.blockNum)
 			if err != nil {
 				apply(err)
 				break
@@ -82,7 +96,5 @@ func (s *blockSync) SyncBlock() {
 		case <-s.stopCh:
 			return
 		}
-
 	}
-
 }

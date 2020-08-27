@@ -21,14 +21,14 @@ type Client struct {
 	lc  *ledger.Client
 
 	//pack args function for chaincode calls
-	PackArgs func([]string) [][]byte
+	packArgs func([]string) [][]byte
 }
 
 func New(cfg *Config) *Client {
 	c := &Client{
 		cfg: cfg,
 
-		PackArgs: func(params []string) [][]byte {
+		packArgs: func(params []string) [][]byte {
 			var args [][]byte
 			for _, param := range params {
 				args = append(args, []byte(param))
@@ -99,7 +99,7 @@ func (c *Client) InvokeChainCode(fcn string, args []string) (fab.TransactionID, 
 	req := channel.Request{
 		ChaincodeID: c.cfg.ChainCodeID(),
 		Fcn:         fcn,
-		Args:        c.PackArgs(args),
+		Args:        c.packArgs(args),
 	}
 	resp, err := c.cc.Execute(req, c.cfg.RequestOption)
 	if err != nil {

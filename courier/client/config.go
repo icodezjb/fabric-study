@@ -1,12 +1,14 @@
 package client
 
 import (
+	"strings"
+
+	"github.com/icodezjb/fabric-study/courier/utils"
+
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/core"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
-	"github.com/icodezjb/fabric-study/courier/utils"
 	"github.com/spf13/pflag"
-	"strings"
 )
 
 const (
