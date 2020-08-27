@@ -40,6 +40,9 @@ cd fabric-cli
 ########### invoke
 ./fabric-cli chaincode invoke --cid mychannel --ccid=mycc --args '{"Func":"invoke","Args":["a","b","1"]}' --peer grpcs://localhost:7051,grpcs://localhost:9051 --base64 --config ../config/org1sdk-config.yam
 
+########### batch invoke
+./fabric-cli  chaincode invoke --cid mychannel --ccid=mycc --args='[{"Func":"invoke","Args":["a","b","1"]},{"Func":"invoke","Args":["b","a","1"]}]' --iterations 100 --concurrency 8 --attempts=3  --config ../config/org1sdk-config.yaml
+
 ########### query
 ./fabric-cli query info --cid mychannel  --config ../config/org1sdk-config.yaml 
 
