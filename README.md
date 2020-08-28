@@ -11,6 +11,12 @@ cd first-network
 ./byfn.sh --help
 ```
 
+#### courier
+```bash
+cd cmd/courier
+go run main.go --ccid=mycc --config ../../config/org1sdk-config.yaml  --cid mychannel --peer 'grpcs://localhost:7051'
+```
+
 #### fabric-cli
 ```bash
 cd fabric-cli
