@@ -41,6 +41,7 @@ func main() {
 	client.InitChaincodeID(flags)
 	client.InitPeerURL(flags)
 	client.InitUserName(flags)
+	client.InitFilterEvents(flags)
 
 	if err := mainCmd.Execute(); err != nil {
 		fmt.Println(err)

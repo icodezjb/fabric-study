@@ -21,7 +21,7 @@ func TestGetPrepareCrossTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	preTxs, err := GetPrepareCrossTxs(&block, true)
+	preTxs, err := GetPrepareCrossTxs(&block, map[string]struct{}{"evtTransfer": {}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,20 +30,12 @@ func TestGetPrepareCrossTxs(t *testing.T) {
 		t.Fatalf("len(preTxs), want: 1, got: %d", len(preTxs))
 	}
 
-	if preTxs[0].Number != 4 {
-		t.Fatalf("Number, want: 4, got: %d", preTxs[0].Number)
+	if preTxs[0].BlockNumber != 4 {
+		t.Fatalf("Number, want: 4, got: %d", preTxs[0].BlockNumber)
 	}
 
 	if preTxs[0].TxID != "0f63b3b2a634c53c3829ea8658199b190ed1db6b708875415d720c448f0022ef" {
 		t.Fatalf("TxID, want: <0f63b3b2a634c53c3829ea8658199b190ed1db6b708875415d720c448f0022ef>, got: <%s>", preTxs[0].TxID)
-	}
-
-	if preTxs[0].ChannelID != "mychannel" {
-		t.Fatalf("ChannelID, want: <mychannel>, got: <%s>", preTxs[0].ChannelID)
-	}
-
-	if preTxs[0].ChainCodeID != "mycc" {
-		t.Fatalf("ChainCodeID, want: <mycc>, got: <%s>", preTxs[0].ChainCodeID)
 	}
 
 	if preTxs[0].TimeStamp.String() != "seconds:1598492802 nanos:138704712 " {

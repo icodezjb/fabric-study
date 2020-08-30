@@ -2,6 +2,7 @@ package courier
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/icodezjb/fabric-study/courier/utils"
@@ -60,27 +61,30 @@ func (ta transactionActions) toFilteredActions() (*peer.FilteredTransaction_Tran
 }
 
 type PrepareCrossTx struct {
-	TxID        string
-	ChainCodeID string
+	//Block->Header->Number
+	BlockNumber uint64
 
-	ChannelID string
-	Number    uint64
+	//Block->Data->Data(Envelope[x])->Payload->Header->ChannelHeader->TxId
+	TxID string
+	//Block->Data->Data(Envelope[x])->Payload->Header->ChannelHeader->Timestamp
 	TimeStamp *timestamp.Timestamp
 
 	// hyperledger fabric version 1
 	// only supports a single action per transaction
+	// Block->Data->Data(Envelope[x])->Payload->Data->Transaction->Action[0]->ChainCodeAction[0]->ChaincodeEvent->EventName
 	EventName string
-	Payload   []byte
+	// Block->Data->Data(Envelope[x])->Payload->Data->Transaction->Action[0]->ChainCodeAction[0]->ChaincodeEvent->Payload
+	Payload []byte
 }
 
 func (t *PrepareCrossTx) String() string {
 	ts := time.Unix(t.TimeStamp.Seconds, int64(t.TimeStamp.Nanos))
-	return fmt.Sprintf("TxID = %s\nChainCodeID = %s\nChannelID = %s\nNumber = %d\nTimeStamp = %s\nEventName = %s\nPayload = %v",
-		t.TxID, t.ChainCodeID, t.ChannelID, t.Number, ts, t.EventName, string(t.Payload))
+	return fmt.Sprintf("TxID = %s\nNumber = %d\nTimeStamp = %s\nEventName = %s\nPayload = %v",
+		t.TxID, t.BlockNumber, ts, t.EventName, string(t.Payload))
 }
 
 // GetPrepareCrossTxs to collect ENDORSER_TRANSACTION and with event tx, if withEvent set true
-func GetPrepareCrossTxs(block *common.Block, withEvent bool) (preCrossTxs []*PrepareCrossTx, err error) {
+func GetPrepareCrossTxs(block *common.Block, filterMap map[string]struct{}) (preCrossTxs []*PrepareCrossTx, err error) {
 	txsFltr := utils.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 	blockNum := block.Header.Number
 
@@ -89,28 +93,35 @@ func GetPrepareCrossTxs(block *common.Block, withEvent bool) (preCrossTxs []*Pre
 			continue
 		}
 
-		channelHeader, payloadData, err := getChannelHeaderAndData(txIndex, blockNum, ebytes)
-		switch {
-		case err != nil:
-			return nil, err
-		case channelHeader == nil:
-			continue
-		}
-
-		preCrossTx, err := getPrepareCrossTx(channelHeader, blockNum)
-		switch {
-		case err != nil:
-			return nil, err
-		case preCrossTx == nil:
-			continue
-		}
-
-		if err = getTxEvents(preCrossTx, payloadData); err != nil {
+		headerData, payloadData, err := ParseEnvelopePayload(txIndex, ebytes)
+		if err != nil {
 			return nil, err
 		}
 
-		if withEvent && preCrossTx.Payload == nil {
+		chdr, err := getChannelHeader(headerData)
+		if err != nil && strings.Contains(err.Error(), "HeaderType_ENDORSER_TRANSACTION") {
 			continue
+		}
+
+		eventName, eventPayload, err := getTxEvents(payloadData)
+		if err != nil && strings.Contains(err.Error(), "no chaincode event") {
+			continue
+		}
+
+		if _, ok := filterMap[eventName]; !ok {
+			continue
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		preCrossTx := &PrepareCrossTx{
+			BlockNumber: blockNum,
+			TxID:        chdr.TxId,
+			TimeStamp:   chdr.Timestamp,
+			EventName:   eventName,
+			Payload:     eventPayload,
 		}
 
 		preCrossTxs = append(preCrossTxs, preCrossTx)
@@ -123,10 +134,9 @@ func GetPrepareCrossTxs(block *common.Block, withEvent bool) (preCrossTxs []*Pre
 	return preCrossTxs, nil
 }
 
-func getChannelHeaderAndData(txIndex int, number uint64, ebytes []byte) ([]byte, []byte, error) {
+func ParseEnvelopePayload(txIndex int, ebytes []byte) ([]byte, []byte, error) {
 	if ebytes == nil {
-		log.Debug("got nil data bytes for tx, txIndex=%d, blockNum=%d", txIndex, number)
-		return nil, nil, nil
+		return nil, nil, fmt.Errorf("got nil data bytes for tx %d", txIndex)
 	}
 
 	env, err := utils.GetEnvelopeFromBlock(ebytes)
@@ -135,62 +145,47 @@ func getChannelHeaderAndData(txIndex int, number uint64, ebytes []byte) ([]byte,
 	}
 
 	// get the payload from the envelope
-	paload, err := utils.GetPayload(env)
+	payload, err := utils.GetPayload(env)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not extract payload from envelope: %w", err)
 	}
 
-	if paload.Header == nil {
-		log.Debug("transaction payload header is nil, %d, block num %d", txIndex, number)
-		return nil, nil, nil
+	if payload.Header == nil {
+		return nil, nil, fmt.Errorf("transaction payload header is nil")
 	}
 
-	return paload.Header.ChannelHeader, paload.Data, nil
+	return payload.Header.ChannelHeader, payload.Data, nil
 }
 
-func getPrepareCrossTx(channelHeader []byte, blockNum uint64) (*PrepareCrossTx, error) {
+func getChannelHeader(channelHeader []byte) (*common.ChannelHeader, error) {
 	chdr, err := utils.UnmarshalChannelHeader(channelHeader)
 	if err != nil {
 		return nil, err
 	}
 	if common.HeaderType(chdr.Type) != common.HeaderType_ENDORSER_TRANSACTION {
-		return nil, nil
-	}
-	ccHdrExt, err := utils.UnmarshalChaincodeHeaderExtension(chdr.Extension)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("not HeaderType_ENDORSER_TRANSACTION")
 	}
 
-	pickTx := &PrepareCrossTx{
-		ChannelID:   chdr.ChannelId,
-		Number:      blockNum,
-		TimeStamp:   chdr.Timestamp,
-		TxID:        chdr.TxId,
-		ChainCodeID: ccHdrExt.ChaincodeId.Name,
-	}
-
-	return pickTx, nil
+	return chdr, nil
 }
 
-func getTxEvents(preCrossTx *PrepareCrossTx, payload []byte) error {
+func getTxEvents(payload []byte) (string, []byte, error) {
 	tx, err := utils.GetTransaction(payload)
 	if err != nil {
-		return fmt.Errorf("error unmarshal transaction payload for block event: %w", err)
+		return "", nil, fmt.Errorf("error unmarshal transaction payload for block event: %w", err)
 	}
 
 	actionsData, err := transactionActions(tx.Actions).toFilteredActions()
 	if err != nil {
-		return err
+		return "", nil, err
 	}
 
 	// hyperledger fabric version 1
 	// only supports a single action per transaction
 	if actionsData.TransactionActions.ChaincodeActions != nil {
-		ccEvent := actionsData.TransactionActions.ChaincodeActions[0]
-
-		preCrossTx.EventName = ccEvent.ChaincodeEvent.EventName
-		preCrossTx.Payload = ccEvent.ChaincodeEvent.Payload
+		ccEvent := actionsData.TransactionActions.ChaincodeActions[0].ChaincodeEvent
+		return ccEvent.EventName, ccEvent.Payload, nil
 	}
 
-	return nil
+	return "", nil, fmt.Errorf("no chaincode event")
 }

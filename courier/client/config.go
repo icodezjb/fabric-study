@@ -31,11 +31,16 @@ const (
 	ConfigFileFlag        = "config"
 	configFileDescription = "The path of the config.yaml file"
 	defaultConfigFile     = ""
+
+	filterEventFlag        = "events"
+	filterEventDescription = "A comma-separated list of the specified events which are in the fabric blocks, e.g. 'precommit, commit'"
+	defaultFilterEvent     = "precommit,commit"
 )
 
 type options struct {
 	configFile string
 	peerUrl    string
+	events     string
 
 	User        string
 	ChannelID   string
@@ -45,6 +50,7 @@ type options struct {
 type Config struct {
 	core.ConfigProvider
 	channel.RequestOption
+	FilterEvents []string
 }
 
 var opts options
@@ -74,6 +80,11 @@ func InitConfigFile(flags *pflag.FlagSet) {
 	flags.StringVar(&opts.configFile, ConfigFileFlag, defaultConfigFile, configFileDescription)
 }
 
+// InitFilterEvents initializes the filter events from the provided arguments
+func InitFilterEvents(flags *pflag.FlagSet) {
+	flags.StringVar(&opts.events, filterEventFlag, defaultFilterEvent, filterEventDescription)
+}
+
 func peerURLs() []string {
 	if opts.peerUrl == "" {
 		utils.Fatalf("peer not set")
@@ -90,6 +101,22 @@ func peerURLs() []string {
 	return urls
 }
 
+func filterEvents() []string {
+	if opts.events == "" {
+		utils.Fatalf("filter events not set")
+	}
+
+	var filterEvents []string
+	if len(strings.TrimSpace(opts.events)) > 0 {
+		events := strings.Split(opts.events, ",")
+		for _, ev := range events {
+			filterEvents = append(filterEvents, ev)
+		}
+	}
+
+	return filterEvents
+}
+
 // InitConfig initializes the configuration
 func InitConfig() *Config {
 	cnfg := config.FromFile(opts.configFile)
@@ -97,6 +124,7 @@ func InitConfig() *Config {
 	cfg := &Config{
 		ConfigProvider: cnfg,
 		RequestOption:  channel.WithTargetEndpoints(peerURLs()...),
+		FilterEvents:   filterEvents(),
 	}
 
 	return cfg

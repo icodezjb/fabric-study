@@ -109,6 +109,10 @@ func (c *Client) InvokeChainCode(fcn string, args []string) (fab.TransactionID, 
 	return resp.TransactionID, nil
 }
 
+func (c *Client) FilterEvents() []string {
+	return c.cfg.FilterEvents
+}
+
 func (c *Client) Close() {
 	c.sdk.Close()
 }

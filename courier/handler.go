@@ -4,7 +4,7 @@ import "github.com/icodezjb/fabric-study/courier/client"
 
 type Handler struct {
 	fabCli  *client.Client
-	blkSync *blockSync
+	blkSync *BlockSync
 }
 
 func New(cfg *client.Config) *Handler {
