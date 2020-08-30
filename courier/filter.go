@@ -84,7 +84,7 @@ func (t *PrepareCrossTx) String() string {
 }
 
 // GetPrepareCrossTxs to collect ENDORSER_TRANSACTION and with event tx, if withEvent set true
-func GetPrepareCrossTxs(block *common.Block, filterMap map[string]struct{}) (preCrossTxs []*PrepareCrossTx, err error) {
+func GetPrepareCrossTxs(block *common.Block, filterFunc func(string) bool) (preCrossTxs []*PrepareCrossTx, err error) {
 	txsFltr := utils.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 	blockNum := block.Header.Number
 
@@ -108,7 +108,7 @@ func GetPrepareCrossTxs(block *common.Block, filterMap map[string]struct{}) (pre
 			continue
 		}
 
-		if _, ok := filterMap[eventName]; !ok {
+		if !filterFunc(eventName) {
 			continue
 		}
 

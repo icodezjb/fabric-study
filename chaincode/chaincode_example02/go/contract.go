@@ -25,7 +25,7 @@ func (t *SimpleChaincode) precommit(stub shim.ChaincodeStubInterface, args []str
 		Owner:       callArgs[0],
 	}
 
-	id, err := core.ContractID(stub.GetTxID())
+	id, err := core.GetContractID(stub.GetTxID())
 	if err != nil {
 		return shim.Error(fmt.Sprintf("get contract id err: %v", err))
 	}
@@ -93,8 +93,18 @@ func (t *SimpleChaincode) commit(stub shim.ChaincodeStubInterface, args []string
 		shim.Error(err.Error())
 	}
 
+	committedEvent := CommittedContract{
+		Staus:      Finished,
+		ContractID: contractID,
+	}
+
+	eventData, err := json.Marshal(committedEvent)
+	if err != nil {
+		shim.Error(err.Error())
+	}
+
 	// send event
-	if err = stub.SetEvent("commit", updateData); err != nil {
+	if err = stub.SetEvent("commit", eventData); err != nil {
 		return shim.Error(err.Error())
 	}
 

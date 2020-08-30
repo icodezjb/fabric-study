@@ -21,7 +21,9 @@ func TestGetPrepareCrossTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	preTxs, err := GetPrepareCrossTxs(&block, map[string]struct{}{"evtTransfer": {}})
+	preTxs, err := GetPrepareCrossTxs(&block, func(ev string) bool {
+		return true
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

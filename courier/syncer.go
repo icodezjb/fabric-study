@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/icodezjb/fabric-study/courier/client"
-	contract "github.com/icodezjb/fabric-study/courier/contractlib"
+	"github.com/icodezjb/fabric-study/courier/contractlib"
 	"github.com/icodezjb/fabric-study/log"
 )
 
@@ -16,25 +16,46 @@ const blockInterval = 2 * time.Second
 
 type BlockSync struct {
 	blockNum     uint64
-	filterEvents map[string]struct{}
+	filterEvents map[string]WithUnmarshal
 	client       *client.Client
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
 	preTxsCh     chan []*PrepareCrossTx
 }
 
+type WithUnmarshal func([]byte) (contractlib.IContract, error)
+
 func NewBlockSync(c *client.Client) *BlockSync {
 	s := &BlockSync{
 		// skip genesis
 		blockNum:     1,
-		filterEvents: make(map[string]struct{}),
+		filterEvents: make(map[string]WithUnmarshal),
 		client:       c,
 		stopCh:       make(chan struct{}),
 		preTxsCh:     make(chan []*PrepareCrossTx),
 	}
-	fmt.Println(c.FilterEvents())
+
 	for _, ev := range c.FilterEvents() {
-		s.filterEvents[ev] = struct{}{}
+		switch ev {
+		case "precommit":
+			s.filterEvents[ev] = func(bytes []byte) (contractlib.IContract, error) {
+				contract := &contractlib.Contract{}
+				if err := json.Unmarshal(bytes, &contract); err != nil {
+					return nil, err
+				}
+				return contract, nil
+			}
+		case "commit":
+			s.filterEvents[ev] = func(bytes []byte) (contractlib.IContract, error) {
+				contract := &contractlib.CommittedContract{}
+				if err := json.Unmarshal(bytes, &contract); err != nil {
+					return nil, err
+				}
+				return contract, nil
+			}
+		default:
+			panic(fmt.Sprintf("unsupported filter event type: %s", ev))
+		}
 	}
 
 	return s
@@ -84,7 +105,13 @@ func (s *BlockSync) syncBlock() {
 				break
 			}
 
-			preCrossTxs, err := GetPrepareCrossTxs(block, s.filterEvents)
+			preCrossTxs, err := GetPrepareCrossTxs(block, func(eventName string) bool {
+				if _, ok := s.filterEvents[eventName]; ok {
+					return true
+				}
+				return false
+			})
+
 			if err != nil {
 				apply(err)
 				break
@@ -114,13 +141,25 @@ func (s *BlockSync) ProcessPreTxs() {
 		select {
 		case preCrossTxs := <-s.preTxsCh:
 
-			for _, tx := range preCrossTxs {
+			var crossTxs = make([]CrossTx, len(preCrossTxs))
+			for i, tx := range preCrossTxs {
 				//TODO
-				var swap contract.Contract
-				json.Unmarshal(tx.Payload, &swap)
-				fmt.Println(tx)
-				fmt.Println(swap)
+				var crossTx CrossTx
+				c, err := s.filterEvents[tx.EventName](tx.Payload)
+				if err != nil {
+					log.Error("ProcessPreTxs event: %s, err:%v, f=%v", tx.EventName, err, s.filterEvents[tx.EventName])
+				}
+
+				crossTx.BlockNumber = tx.BlockNumber
+				crossTx.TxID = tx.TxID
+				crossTx.TimeStamp = tx.TimeStamp
+
+				crossTx.IContract = c
+
+				crossTxs = append(crossTxs[:i], crossTx)
 			}
+
+			log.Info("%v", crossTxs)
 		case <-s.stopCh:
 			return
 		}

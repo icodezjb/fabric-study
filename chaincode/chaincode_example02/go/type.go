@@ -72,6 +72,11 @@ func (c *CStatus) UnmarshalText(text []byte) error {
 	return nil
 }
 
+type IContract interface {
+	GetContractID(string) (string, error)
+	GetStatus() CStatus
+}
+
 type ContractCore struct {
 	Address     string   `json:"address"`
 	Value       string   `json:"value"`
@@ -84,7 +89,7 @@ type ContractCore struct {
 
 // TODO: 待验证:在chaincode执行环境内,不应该使用timestamp,uuid等任何随机源数据,
 //  因为多个背书节点从随机源获取不同的数据,造成共识失败
-func (core ContractCore) ContractID(txid string) (string, error) {
+func (core *ContractCore) GetContractID(txid string) (string, error) {
 	rawData, err := json.Marshal(core)
 	if err != nil {
 		return "", err
@@ -105,4 +110,21 @@ type Contract struct {
 	ContractID string  `json:"contract_id"`
 	Receipt    string  `json:"receipt"`
 	ContractCore
+}
+
+func (c *Contract) GetStatus() CStatus {
+	return c.Status
+}
+
+type CommittedContract struct {
+	Staus      CStatus `json:"staus"`
+	ContractID string  `json:"contract_id"`
+}
+
+func (c *CommittedContract) GetContractID(_ string) (string, error) {
+	return c.ContractID, nil
+}
+
+func (c *CommittedContract) GetStatus() CStatus {
+	return c.Staus
 }
