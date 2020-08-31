@@ -64,7 +64,7 @@ func NewBlockSync(c *client.Client) *BlockSync {
 func (s *BlockSync) Start() {
 	s.wg.Add(2)
 	go s.syncBlock()
-	go s.ProcessPreTxs()
+	go s.processPreTxs()
 
 	log.Debug("blockSync start")
 }
@@ -134,32 +134,32 @@ func (s *BlockSync) syncBlock() {
 	}
 }
 
-func (s *BlockSync) ProcessPreTxs() {
+func (s *BlockSync) processPreTxs() {
 	defer s.wg.Done()
 
 	for {
 		select {
 		case preCrossTxs := <-s.preTxsCh:
 
-			var crossTxs = make([]CrossTx, len(preCrossTxs))
+			var crossTxs = make([]*CrossTx, len(preCrossTxs))
 			for i, tx := range preCrossTxs {
-				//TODO
-				var crossTx CrossTx
 				c, err := s.filterEvents[tx.EventName](tx.Payload)
 				if err != nil {
+					//TODO: handle
 					log.Error("ProcessPreTxs event: %s, err:%v, f=%v", tx.EventName, err, s.filterEvents[tx.EventName])
 				}
 
-				crossTx.BlockNumber = tx.BlockNumber
-				crossTx.TxID = tx.TxID
-				crossTx.TimeStamp = tx.TimeStamp
-
-				crossTx.IContract = c
+				crossTx := &CrossTx{
+					IContract:   c,
+					TxID:        tx.TxID,
+					BlockNumber: tx.BlockNumber,
+					TimeStamp:   tx.TimeStamp,
+				}
 
 				crossTxs = append(crossTxs[:i], crossTx)
 			}
 
-			log.Info("%v", crossTxs)
+			log.Debug("len(crossTxs) = %v", len(crossTxs))
 		case <-s.stopCh:
 			return
 		}
