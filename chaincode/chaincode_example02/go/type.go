@@ -72,9 +72,62 @@ func (c *CStatus) UnmarshalText(text []byte) error {
 	return nil
 }
 
+type Contract struct {
+	IContract
+}
+
+func (c *Contract) UnmarshalJSON(bytes []byte) (err error) {
+	var objMap map[string]*json.RawMessage
+	err = json.Unmarshal(bytes, &objMap)
+	if err != nil {
+		return err
+	}
+
+	c.IContract, err = RebuildIContract(*objMap["IContract"])
+
+	return err
+}
+
+func RebuildIContract(bytes json.RawMessage) (c IContract, err error) {
+	var contractMap map[string]*json.RawMessage
+	err = json.Unmarshal(bytes, &contractMap)
+	if err != nil {
+		return nil, err
+	}
+
+	var typ string
+	err = json.Unmarshal(*contractMap["status"], &typ)
+	if err != nil {
+		return nil, err
+	}
+
+	switch typ {
+	case "Init":
+		fallthrough
+	case "Pending":
+		fallthrough
+	case "Executed":
+		fallthrough
+	case "Completed":
+		var pc PrecommitContract
+		err = json.Unmarshal(bytes, &pc)
+		c = &pc
+	case "Finished":
+		var cc CommitContract
+		err = json.Unmarshal(bytes, &cc)
+		c = &cc
+	default:
+		return nil, fmt.Errorf("unsupport contract type: %s", typ)
+	}
+
+	return c, nil
+}
+
 type IContract interface {
-	GetContractID(string) (string, error)
+	GetContractID() string
 	GetStatus() CStatus
+	GetCoreInfo() *ContractCore
+	UpdateStatus(CStatus)
 }
 
 type ContractCore struct {
@@ -87,9 +140,7 @@ type ContractCore struct {
 	Creator     string   `json:"creator"`
 }
 
-// TODO: 待验证:在chaincode执行环境内,不应该使用timestamp,uuid等任何随机源数据,
-//  因为多个背书节点从随机源获取不同的数据,造成共识失败
-func (core *ContractCore) GetContractID(txid string) (string, error) {
+func (core *ContractCore) genContractID(txid string) (string, error) {
 	rawData, err := json.Marshal(core)
 	if err != nil {
 		return "", err
@@ -105,26 +156,50 @@ func (core *ContractCore) GetContractID(txid string) (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 
-type Contract struct {
-	Status     CStatus `json:"status"`
+type PrecommitContract struct {
+	Status     CStatus `json:"status" storm:"index"`
 	ContractID string  `json:"contract_id"`
-	Receipt    string  `json:"receipt"`
+	Receipt    string  `json:"receipt" storm:"index"`
 	ContractCore
 }
 
-func (c *Contract) GetStatus() CStatus {
+func (c *PrecommitContract) GetCoreInfo() *ContractCore {
+	return &c.ContractCore
+}
+
+func (c *PrecommitContract) GetContractID() string {
+	return c.ContractID
+}
+
+func (c *PrecommitContract) GetStatus() CStatus {
 	return c.Status
 }
 
-type CommittedContract struct {
-	Staus      CStatus `json:"staus"`
+func (c *PrecommitContract) UpdateStatus(s CStatus) {
+	c.Status = s
+}
+
+func (c *PrecommitContract) UpdateReceipt(receipt string) {
+	c.Receipt = receipt
+}
+
+type CommitContract struct {
+	Status     CStatus `json:"status" storm:"index"`
 	ContractID string  `json:"contract_id"`
 }
 
-func (c *CommittedContract) GetContractID(_ string) (string, error) {
-	return c.ContractID, nil
+func (c *CommitContract) GetContractID() string {
+	return c.ContractID
 }
 
-func (c *CommittedContract) GetStatus() CStatus {
-	return c.Staus
+func (c *CommitContract) GetStatus() CStatus {
+	return c.Status
+}
+
+func (c *CommitContract) UpdateStatus(s CStatus) {
+	c.Status = s
+}
+
+func (c *CommitContract) GetCoreInfo() *ContractCore {
+	return nil
 }

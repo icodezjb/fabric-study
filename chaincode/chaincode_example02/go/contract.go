@@ -25,15 +25,17 @@ func (t *SimpleChaincode) precommit(stub shim.ChaincodeStubInterface, args []str
 		Owner:       callArgs[0],
 	}
 
-	id, err := core.GetContractID(stub.GetTxID())
+	id, err := core.genContractID(stub.GetTxID())
 	if err != nil {
 		return shim.Error(fmt.Sprintf("get contract id err: %v", err))
 	}
 
 	contract := Contract{
-		Status:       Init,
-		ContractID:   id,
-		ContractCore: core,
+		&PrecommitContract{
+			Status:       Init,
+			ContractID:   id,
+			ContractCore: core,
+		},
 	}
 
 	rawContract, err := json.Marshal(&contract)
@@ -72,16 +74,21 @@ func (t *SimpleChaincode) commit(stub shim.ChaincodeStubInterface, args []string
 		shim.Error(fmt.Sprintf("parse contract with %s, err: %v", contractID, err))
 	}
 
-	if contract.Status == Finished {
+	if contract.GetStatus() == Finished {
 		shim.Success([]byte("replicate call commit"))
 	}
 
-	if err = t.doCommit(stub, &contract); err != nil {
+	preCommit, ok := contract.IContract.(*PrecommitContract)
+	if !ok {
+		shim.Error(fmt.Sprintf("assert contract.IContract.(*PrecommitContract) failed"))
+	}
+
+	if err = t.doCommit(stub, preCommit); err != nil {
 		shim.Error(fmt.Sprintf("doCommit err: %v", err))
 	}
 
-	contract.Status = Finished
-	contract.Receipt = receipt
+	preCommit.UpdateStatus(Finished)
+	preCommit.UpdateReceipt(receipt)
 
 	updateData, err := json.Marshal(contract)
 	if err != nil {
@@ -93,25 +100,26 @@ func (t *SimpleChaincode) commit(stub shim.ChaincodeStubInterface, args []string
 		shim.Error(err.Error())
 	}
 
-	committedEvent := CommittedContract{
-		Staus:      Finished,
-		ContractID: contractID,
-	}
+	commit := Contract{
+		&CommitContract{
+			Status:     Finished,
+			ContractID: contractID,
+		}}
 
-	eventData, err := json.Marshal(committedEvent)
+	rawCommit, err := json.Marshal(commit)
 	if err != nil {
 		shim.Error(err.Error())
 	}
 
 	// send event
-	if err = stub.SetEvent("commit", eventData); err != nil {
+	if err = stub.SetEvent("commit", rawCommit); err != nil {
 		return shim.Error(err.Error())
 	}
 
 	return shim.Success(nil)
 }
 
-func (t *SimpleChaincode) doCommit(stub shim.ChaincodeStubInterface, c *Contract) error {
+func (t *SimpleChaincode) doCommit(stub shim.ChaincodeStubInterface, c *PrecommitContract) error {
 	switch c.ToCallFunc {
 	case "invoke":
 		return t.doInvoke(stub, c.Args)

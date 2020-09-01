@@ -8,6 +8,7 @@ import (
 
 	"github.com/icodezjb/fabric-study/courier"
 	"github.com/icodezjb/fabric-study/courier/client"
+	"github.com/icodezjb/fabric-study/courier/utils"
 	"github.com/icodezjb/fabric-study/log"
 
 	"github.com/spf13/cobra"
@@ -20,7 +21,10 @@ func main() {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			h := courier.New(client.InitConfig())
+			h, err := courier.New(client.InitConfig())
+			if err != nil {
+				utils.Fatalf("courier init err: %v", err)
+			}
 
 			h.Start()
 

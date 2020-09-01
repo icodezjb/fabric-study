@@ -24,6 +24,10 @@ type Client struct {
 	packArgs func([]string) [][]byte
 }
 
+type SimpleClient interface {
+	Send([]byte) error
+}
+
 func New(cfg *Config) *Client {
 	c := &Client{
 		cfg: cfg,

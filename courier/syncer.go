@@ -16,45 +16,40 @@ const blockInterval = 2 * time.Second
 
 type BlockSync struct {
 	blockNum     uint64
-	filterEvents map[string]WithUnmarshal
+	filterEvents map[string]struct{}
 	client       *client.Client
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
 	preTxsCh     chan []*PrepareCrossTx
+	txMgr        *TxManager
+	errCh        chan error
 }
 
-type WithUnmarshal func([]byte) (contractlib.IContract, error)
-
-func NewBlockSync(c *client.Client) *BlockSync {
-	s := &BlockSync{
+func NewBlockSync(c *client.Client, txMgr *TxManager) *BlockSync {
+	startNum := txMgr.Get("number")
+	if startNum == 0 {
 		// skip genesis
-		blockNum:     1,
-		filterEvents: make(map[string]WithUnmarshal),
+		startNum = 1
+	}
+
+	s := &BlockSync{
+		blockNum:     startNum,
+		filterEvents: make(map[string]struct{}),
 		client:       c,
 		stopCh:       make(chan struct{}),
 		preTxsCh:     make(chan []*PrepareCrossTx),
+		errCh:        make(chan error),
+		txMgr:        txMgr,
 	}
 
 	for _, ev := range c.FilterEvents() {
 		switch ev {
 		case "precommit":
-			s.filterEvents[ev] = func(bytes []byte) (contractlib.IContract, error) {
-				contract := &contractlib.Contract{}
-				if err := json.Unmarshal(bytes, &contract); err != nil {
-					return nil, err
-				}
-				return contract, nil
-			}
+			s.filterEvents[ev] = struct{}{}
 		case "commit":
-			s.filterEvents[ev] = func(bytes []byte) (contractlib.IContract, error) {
-				contract := &contractlib.CommittedContract{}
-				if err := json.Unmarshal(bytes, &contract); err != nil {
-					return nil, err
-				}
-				return contract, nil
-			}
+			s.filterEvents[ev] = struct{}{}
 		default:
-			panic(fmt.Sprintf("unsupported filter event type: %s", ev))
+			log.Crit(fmt.Sprintf("unsupported filter event type: %s", ev))
 		}
 	}
 
@@ -66,14 +61,14 @@ func (s *BlockSync) Start() {
 	go s.syncBlock()
 	go s.processPreTxs()
 
-	log.Debug("blockSync start")
+	log.Info("[BlockSync] started")
 }
 
 func (s *BlockSync) Stop() {
-	log.Debug("blockSync stopping")
+	log.Info("[BlockSync] stopping")
 	close(s.stopCh)
 	s.wg.Wait()
-	log.Debug("blockSync stopped")
+	log.Info("[BlockSync] stopped")
 }
 
 func (s *BlockSync) syncBlock() {
@@ -87,18 +82,24 @@ func (s *BlockSync) syncBlock() {
 		case strings.Contains(err.Error(), "Entry not found in index"):
 			blockTimer.Reset(blockInterval)
 		case strings.Contains(err.Error(), "ignore"):
-			log.Debug("sync %v", err)
+			log.Debug("[BlockSync] sync %v", err)
 			s.blockNum++
 			blockTimer.Reset(blockInterval)
 		default:
-			log.Error("sync block err: %v", err)
+			log.Error("[BlockSync] sync block err: %v", err)
+			s.Stop()
 		}
 	}
 
 	for {
 		select {
 		case <-blockTimer.C:
-			log.Debug("sync block #%d", s.blockNum)
+			log.Debug("[BlockSync] sync block #%d", s.blockNum)
+			if err := s.txMgr.Set("number", s.blockNum); err != nil {
+				apply(err)
+				break
+			}
+
 			block, err := s.client.QueryBlockByNum(s.blockNum)
 			if err != nil {
 				apply(err)
@@ -128,6 +129,9 @@ func (s *BlockSync) syncBlock() {
 				//sync next block timestamp
 				blockTimer.Reset(blockInterval)
 			}
+		case err := <-s.errCh:
+			apply(err)
+			break
 		case <-s.stopCh:
 			return
 		}
@@ -143,23 +147,31 @@ func (s *BlockSync) processPreTxs() {
 
 			var crossTxs = make([]*CrossTx, len(preCrossTxs))
 			for i, tx := range preCrossTxs {
-				c, err := s.filterEvents[tx.EventName](tx.Payload)
+				var c contractlib.Contract
+				err := json.Unmarshal(tx.Payload, &c)
 				if err != nil {
-					//TODO: handle
-					log.Error("ProcessPreTxs event: %s, err:%v, f=%v", tx.EventName, err, s.filterEvents[tx.EventName])
+					log.Error("[BlockSync] ProcessPreTxs parse Contract event: %s, err: %v", tx.EventName, err)
+					s.errCh <- err
+					break
 				}
 
 				crossTx := &CrossTx{
-					IContract:   c,
+					Contract:    c,
 					TxID:        tx.TxID,
 					BlockNumber: tx.BlockNumber,
 					TimeStamp:   tx.TimeStamp,
+					CrossID:     c.GetContractID(),
 				}
 
 				crossTxs = append(crossTxs[:i], crossTx)
 			}
 
-			log.Debug("len(crossTxs) = %v", len(crossTxs))
+			log.Debug("[BlockSync] len(crossTxs): %v", len(crossTxs))
+			if err := s.txMgr.AddTxs(crossTxs); err != nil {
+				log.Error("[BlockSync] processPreTxs err: %v", err)
+				s.errCh <- err
+				break
+			}
 		case <-s.stopCh:
 			return
 		}

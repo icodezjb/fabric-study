@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/Shopify/sarama v1.23.1 // indirect
+	github.com/asdine/storm/v3 v3.2.1
 	github.com/fsouza/go-dockerclient v1.6.5 // indirect
 	github.com/go-stack/stack v1.8.0
 	github.com/golang/protobuf v1.3.2
