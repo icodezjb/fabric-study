@@ -17,15 +17,18 @@ const blockInterval = 2 * time.Second
 type BlockSync struct {
 	blockNum     uint64
 	filterEvents map[string]struct{}
-	client       *client.Client
+	client       client.FabricClient
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
 	preTxsCh     chan []*PrepareCrossTx
 	txMgr        *TxManager
 	errCh        chan error
+
+	//for test
+	syncTestHook func([]*CrossTx)
 }
 
-func NewBlockSync(c *client.Client, txMgr *TxManager) *BlockSync {
+func NewBlockSync(c client.FabricClient, txMgr *TxManager) *BlockSync {
 	startNum := txMgr.Get("number")
 	if startNum == 0 {
 		// skip genesis
@@ -167,6 +170,12 @@ func (s *BlockSync) processPreTxs() {
 			}
 
 			log.Debug("[BlockSync] len(crossTxs): %v", len(crossTxs))
+
+			if s.syncTestHook != nil {
+				s.syncTestHook(crossTxs)
+				break
+			}
+
 			if err := s.txMgr.AddTxs(crossTxs); err != nil {
 				log.Error("[BlockSync] processPreTxs err: %v", err)
 				s.errCh <- err

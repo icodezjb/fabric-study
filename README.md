@@ -22,6 +22,7 @@ go run main.go --ccid=mycc --config ../../config/org1sdk-config.yaml  --cid mych
 cd fabric-cli
 go build
 ./fabric-cli chaincode query --cid mychannel --ccid mycc --args '{"Func":"query","Args":["a"]}' --peer grpcs://localhost:7051 --payload --config ../config/org1sdk-config.yaml
+./fabric-cli chaincode invoke --cid mychannel --ccid=mycc --args '{"Func":"precommit","Args":["sipc-address","100","如果给a的sipc-addresss转账1sipc, 那么a将给b转10个coin","invoke","a b 10"]}' --peer grpcs://localhost:7051 --base64 --config ../config/org1sdk-config.yaml
 ```
 
 #### install your chaincode

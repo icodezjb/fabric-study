@@ -28,6 +28,14 @@ type SimpleClient interface {
 	Send([]byte) error
 }
 
+type FabricClient interface {
+	QueryBlockByNum(number uint64) (*common.Block, error)
+	InvokeChainCode(fcn string, args []string) (fab.TransactionID, error)
+
+	FilterEvents() []string
+	Close()
+}
+
 func New(cfg *Config) *Client {
 	c := &Client{
 		cfg: cfg,

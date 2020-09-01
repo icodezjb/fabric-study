@@ -6,7 +6,7 @@ import (
 )
 
 type Handler struct {
-	fabCli  *client.Client
+	fabCli  client.FabricClient
 	blkSync *BlockSync
 	rootDB  *storm.DB
 	txMgr   *TxManager
