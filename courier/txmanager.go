@@ -2,13 +2,15 @@ package courier
 
 import (
 	"encoding/json"
-	"github.com/asdine/storm/v3/q"
-	"github.com/golang/protobuf/ptypes/timestamp"
+	"sync"
+
 	"github.com/icodezjb/fabric-study/courier/client"
 	"github.com/icodezjb/fabric-study/courier/contractlib"
 	"github.com/icodezjb/fabric-study/courier/utils/prque"
 	"github.com/icodezjb/fabric-study/log"
-	"sync"
+
+	"github.com/asdine/storm/v3/q"
+	"github.com/golang/protobuf/ptypes/timestamp"
 )
 
 type CrossTx struct {
@@ -43,45 +45,46 @@ func (c *CrossTx) UnmarshalJSON(bytes []byte) (err error) {
 	return nil
 }
 
+type CrossTxReceipt struct {
+	CrossID  string
+	Receipt  string
+	Sequence int64
+}
+
 type Prqueue struct {
 	prq     *prque.Prque
 	process chan struct{}
 	mu      sync.Mutex
 }
 
-type mockSimplechain struct {
-	count uint32
-}
-
-func (ms *mockSimplechain) Send([]byte) error {
-	ms.count++
-	log.Info("send to simplechain", "count", ms.count)
-	return nil
-}
-
 type TxManager struct {
 	DB
-	sClient  client.SimpleClient
-	wg       sync.WaitGroup
-	stopCh   chan struct{}
+	oClient client.OutChainClient
+	fClient client.FabricClient
+
+	wg     sync.WaitGroup
+	stopCh chan struct{}
+
 	pending  Prqueue
 	executed Prqueue
 }
 
-func NewTxManager(db DB) *TxManager {
+func NewTxManager(fabCli client.FabricClient, outCli client.OutChainClient, db DB) *TxManager {
 	return &TxManager{
 		DB:       db,
 		stopCh:   make(chan struct{}),
 		pending:  Prqueue{prq: prque.New(nil), process: make(chan struct{}, 4)},
 		executed: Prqueue{prq: prque.New(nil), process: make(chan struct{}, 8)},
-		sClient:  &mockSimplechain{},
+		oClient:  outCli,
+		fClient:  fabCli,
 	}
 }
 
 func (t *TxManager) Start() {
 	log.Info("[TxManager] starting")
-	t.wg.Add(1)
-	go t.loop()
+	t.wg.Add(2)
+	go t.ProcessCrossTxs()
+	go t.ProcessCrossTxReceipts()
 
 	t.reload()
 	log.Info("[TxManager] started")
@@ -91,6 +94,13 @@ func (t *TxManager) Stop() {
 	log.Info("[TxManager] stopping")
 	close(t.stopCh)
 	t.wg.Wait()
+
+	t.fClient.Close()
+	log.Info("[TxManager] fClient closed")
+
+	t.oClient.Close()
+	log.Info("[TxManager] oClient closed")
+
 	log.Info("[TxManager] stopped")
 }
 
@@ -110,7 +120,7 @@ func (t *TxManager) reload() {
 	//TODO: executed queue
 }
 
-func (t *TxManager) AddTxs(txs []*CrossTx) error {
+func (t *TxManager) AddCrossTxs(txs []*CrossTx) error {
 	// pick up the precommit contract txs
 	t.pending.mu.Lock()
 	for _, tx := range txs {
@@ -133,9 +143,13 @@ func (t *TxManager) AddTxs(txs []*CrossTx) error {
 	return nil
 }
 
-func (t *TxManager) loop() {
-	defer t.wg.Done()
+func (t *TxManager) ProcessCrossTxs() {
+	defer func() {
+		t.wg.Done()
+		log.Info("[TxManager] process crossTx stopped")
+	}()
 
+	log.Info("[TxManager] process crossTx started")
 	for {
 		select {
 		case <-t.pending.process:
@@ -160,8 +174,8 @@ func (t *TxManager) loop() {
 				}
 
 				// TODO: batch send, MaxBatchSize = 64
-				if err := t.sClient.Send(raw); err != nil {
-					log.Error("[TxManager] send tx to out chain", "crossID", tx.CrossID, "status", tx.GetStatus(), "err", err)
+				if err := t.oClient.Send(raw); err != nil {
+					log.Error("[TxManager] send tx to OutChain", "crossID", tx.CrossID, "status", tx.GetStatus(), "err", err)
 					t.pending.prq.Push(tx, -tx.TimeStamp.Seconds)
 					continue
 				}
@@ -187,17 +201,17 @@ func (t *TxManager) loop() {
 	}
 }
 
-func (t *TxManager) HandleReceipts(reqs []Request) error {
+func (t *TxManager) AddCrossTxReceipts(ctrs []CrossTxReceipt) error {
 	var updaters []func(c *CrossTx)
 	var ids []string
 
-	for _, req := range reqs {
-		ids = append(ids, req.CrossID)
+	for _, ctr := range ctrs {
+		ids = append(ids, ctr.CrossID)
 		updaters = append(updaters, func(c *CrossTx) {
 			c.UpdateStatus(contractlib.Executed)
 			pc, ok := c.IContract.(*contractlib.PrecommitContract)
 			if ok {
-				pc.UpdateReceipt(req.Receipt)
+				pc.UpdateReceipt(ctr.Receipt)
 			}
 		})
 	}
@@ -205,4 +219,54 @@ func (t *TxManager) HandleReceipts(reqs []Request) error {
 	log.Debug("[TxManager] handle receipt", "ids", ids)
 
 	return t.DB.Updates(ids, updaters)
+}
+
+func (t *TxManager) ProcessCrossTxReceipts() {
+	defer func() {
+		t.wg.Done()
+		log.Info("[TxManager] process crossTx receipts stopped")
+	}()
+
+	log.Info("[TxManager] process crossTx receipts started")
+	for {
+		select {
+		case <-t.executed.process:
+			var executed = make([]CrossTxReceipt, 0)
+
+			t.executed.mu.Lock()
+			for !t.executed.prq.Empty() {
+				item, _ := t.executed.prq.Pop()
+				req := item.(CrossTxReceipt)
+				executed = append(executed, req)
+			}
+			t.executed.mu.Unlock()
+
+			if err := t.AddCrossTxReceipts(executed); err != nil {
+				log.Warn("[TxManager] handle receipt", "err", err)
+
+				for _, ctr := range executed {
+					t.executed.prq.Push(ctr, -ctr.Sequence)
+				}
+			}
+
+			log.Info("[TxManager] update Pending to Executed", "len(successList)", len(executed))
+
+			t.wg.Add(1)
+			go func() {
+				t.wg.Done()
+
+				for _, ctr := range executed {
+					_, err := t.fClient.InvokeChainCode("commit", []string{ctr.CrossID, ctr.Receipt})
+					if err != nil {
+						log.Error("[ProcessReq] send tx to fabric", "InvokeChainCode err", err)
+					}
+
+					t.executed.prq.Push(ctr, -ctr.Sequence)
+				}
+			}()
+
+		case <-t.stopCh:
+			return
+		}
+	}
 }

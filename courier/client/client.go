@@ -11,7 +11,7 @@ import (
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 )
 
-type Client struct {
+type FClient struct {
 	// Fabric network information
 	cfg *Config
 
@@ -24,8 +24,23 @@ type Client struct {
 	packArgs func([]string) [][]byte
 }
 
-type SimpleClient interface {
+type OutChainClient interface {
 	Send([]byte) error
+	Close()
+}
+
+type MockOutChainClient struct {
+	count uint32
+}
+
+func (mc *MockOutChainClient) Send([]byte) error {
+	mc.count++
+	log.Info("send to OutChain", "count", mc.count)
+	return nil
+}
+
+func (mc *MockOutChainClient) Close() {
+
 }
 
 type FabricClient interface {
@@ -36,8 +51,8 @@ type FabricClient interface {
 	Close()
 }
 
-func New(cfg *Config) *Client {
-	c := &Client{
+func NewFabCli(cfg *Config) *FClient {
+	c := &FClient{
 		cfg: cfg,
 
 		packArgs: func(params []string) [][]byte {
@@ -54,10 +69,10 @@ func New(cfg *Config) *Client {
 	return c
 }
 
-func (c *Client) initialize() {
+func (c *FClient) initialize() {
 	defer func() {
 		if r := recover(); r != nil {
-			utils.Fatalf("[Client] initialize fatal: %v", r)
+			utils.Fatalf("[FClient] initialize fatal: %v", r)
 		}
 	}()
 
@@ -66,48 +81,48 @@ func (c *Client) initialize() {
 	c.initializeLedgerClient()
 }
 
-func (c *Client) initializeSDK() {
+func (c *FClient) initializeSDK() {
 	sdk, err := fabsdk.New(c.cfg.ConfigProvider)
 	if err != nil {
-		utils.Fatalf("[Client] fabsdk.New err: %+v", err)
+		utils.Fatalf("[FClient] fabsdk.New err: %+v", err)
 	}
 
-	log.Info("[Client] initialized fabric sdk")
+	log.Info("[FClient] initialized fabric sdk")
 
 	c.sdk = sdk
 }
 
-func (c *Client) initializeChannelClient() {
+func (c *FClient) initializeChannelClient() {
 	channelProvider := c.sdk.ChannelContext(c.cfg.ChannelID(), fabsdk.WithUser(c.cfg.UserName()))
 
 	cc, err := channel.New(channelProvider)
 	if err != nil {
-		utils.Fatalf("[Client] channel.New err: %v", err)
+		utils.Fatalf("[FClient] channel.New err: %v", err)
 	}
 
-	log.Info("[Client] initialized channel client")
+	log.Info("[FClient] initialized channel client")
 
 	c.cc = cc
 }
 
-func (c *Client) initializeLedgerClient() {
+func (c *FClient) initializeLedgerClient() {
 	channelProvider := c.sdk.ChannelContext(c.cfg.ChannelID(), fabsdk.WithUser(c.cfg.UserName()))
 	lc, err := ledger.New(channelProvider)
 	if err != nil {
-		utils.Fatalf("[Client] ledger.New err: %v", err)
+		utils.Fatalf("[FClient] ledger.New err: %v", err)
 	}
 
-	log.Info("[Client] initialized ledger client")
+	log.Info("[FClient] initialized ledger client")
 
 	c.lc = lc
 }
 
-func (c *Client) QueryBlockByNum(number uint64) (*common.Block, error) {
+func (c *FClient) QueryBlockByNum(number uint64) (*common.Block, error) {
 	return c.lc.QueryBlock(number)
 }
 
 // InvokeChainCode("invoke", []string{"a", "b", "10"})
-func (c *Client) InvokeChainCode(fcn string, args []string) (fab.TransactionID, error) {
+func (c *FClient) InvokeChainCode(fcn string, args []string) (fab.TransactionID, error) {
 	req := channel.Request{
 		ChaincodeID: c.cfg.ChainCodeID(),
 		Fcn:         fcn,
@@ -121,10 +136,10 @@ func (c *Client) InvokeChainCode(fcn string, args []string) (fab.TransactionID, 
 	return resp.TransactionID, nil
 }
 
-func (c *Client) FilterEvents() []string {
+func (c *FClient) FilterEvents() []string {
 	return c.cfg.FilterEvents
 }
 
-func (c *Client) Close() {
+func (c *FClient) Close() {
 	c.sdk.Close()
 }

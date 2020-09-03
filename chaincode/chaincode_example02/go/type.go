@@ -10,13 +10,16 @@ import (
 type CStatus uint8
 
 const (
-	// Init is the fabric contract status flag of precommit-transaction
+	// Init is the fabric precommit contract transaction status flag, generate on fabric chaincode
 	Init CStatus = 1 << (8 - 1 - iota)
+	// Pending is the fabric precommit contract transaction status flag, change by courier
 	Pending
+	// Executed is the fabric precommit contract transaction status flag, change by courier
 	Executed
+	// Finished is the fabric commit contract transaction status flag, generate on fabric chaincode
 	Finished
+	// Completed is the fabric commit contract transaction status flag, change by courier
 	Completed
-	NoReceipt
 )
 
 func (c CStatus) String() string {
@@ -31,8 +34,6 @@ func (c CStatus) String() string {
 		return "Finished"
 	case Completed:
 		return "Completed"
-	case NoReceipt:
-		return "NoReceipt"
 	default:
 		return "UnSupport"
 	}
@@ -50,8 +51,6 @@ func ParseCStatus(c string) (CStatus, error) {
 		return Finished, nil
 	case "Completed":
 		return Completed, nil
-	case "NoReceipt":
-		return NoReceipt, nil
 	}
 
 	var status CStatus

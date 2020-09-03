@@ -44,6 +44,8 @@ func main() {
 
 	flags := mainCmd.PersistentFlags()
 	client.InitConfigFile(flags)
+	client.InitDataDir(flags)
+	client.InitHTTPEndpoint(flags)
 	client.InitChannelID(flags)
 	client.InitChaincodeID(flags)
 	client.InitPeerURL(flags)

@@ -2,14 +2,14 @@ package courier
 
 import (
 	"fmt"
-	"github.com/asdine/storm/v3/q"
-	"github.com/icodezjb/fabric-study/courier/contractlib"
 	"os"
 	"path/filepath"
 
+	"github.com/icodezjb/fabric-study/courier/contractlib"
 	"github.com/icodezjb/fabric-study/log"
 
 	"github.com/asdine/storm/v3"
+	"github.com/asdine/storm/v3/q"
 )
 
 type FieldName = string
@@ -34,11 +34,13 @@ type Store struct {
 	db storm.Node
 }
 
-func OpenStormDB(dbPath string) (*storm.DB, error) {
-	if len(dbPath) == 0 {
-		return storm.Open(filepath.Join(os.TempDir(), dbPath))
+func OpenStormDB(dataDir string) (*storm.DB, error) {
+	var workDir = os.TempDir()
+
+	if dataDir != "" {
+		workDir = dataDir
 	}
-	return storm.Open(dbPath)
+	return storm.Open(filepath.Join(workDir, "rootdb"))
 }
 
 func NewStore(root *storm.DB) (*Store, error) {
@@ -65,7 +67,7 @@ func (s *Store) Save(txList []*CrossTx) error {
 
 	withTransaction, err := s.db.Begin(true)
 	if err != nil {
-		return err
+		return fmt.Errorf("db begin err: %w", err)
 	}
 	defer withTransaction.Rollback()
 
@@ -76,18 +78,18 @@ func (s *Store) Save(txList []*CrossTx) error {
 		if err == storm.ErrNotFound {
 			log.Debug("[Store] save new cross tx", "crossID", newTx.CrossID, "status", newTx.GetStatus(), "blockNumber", newTx.BlockNumber)
 			if err = withTransaction.Save(newTx); err != nil {
-				return err
+				return fmt.Errorf("db save err: %w", err)
 			}
 		} else if oldTx.IContract == nil {
 			log.Warn("[Store] parse old crossTx failed", "crossID", oldTx.CrossID)
 		} else if newTx.GetStatus() == contractlib.Finished {
-			log.Debug("[Store] to update Finished to Completed", "crossID", newTx.CrossID, "txId", newTx.TxID)
+			log.Debug("[Store] receive Finished crossTx ", "crossID", newTx.CrossID, "txId", newTx.TxID)
 			// update old status, discard new
 			oldTx.UpdateStatus(contractlib.Completed)
 			if err = withTransaction.Update(&oldTx); err != nil {
-				return err
+				return fmt.Errorf("db update err: %w", err)
 			}
-			log.Info("[Store] update Finished to Completed, cross chain completed", "crossID", newTx.CrossID, "txId", newTx.TxID)
+			log.Info("[Store] update Finished to Completed, cross chain transaction completed", "crossID", newTx.CrossID, "txId", newTx.TxID)
 		} else {
 			log.Warn("[Store] duplicate crossTx", "crossID", newTx.CrossID, "old.status", oldTx.GetStatus(), "new.status", newTx.GetStatus())
 			continue
@@ -115,20 +117,20 @@ func (s *Store) Updates(idList []string, updaters []func(c *CrossTx)) error {
 
 	withTransaction, err := s.db.Begin(true)
 	if err != nil {
-		return err
+		return fmt.Errorf("db begin err: %w", err)
 	}
 	defer withTransaction.Rollback()
 
 	for i, id := range idList {
 		var c CrossTx
 		if err = withTransaction.One(CrossIdIndex, id, &c); err != nil {
-			return err
+			return fmt.Errorf("db query err: %w", err)
 		}
 
 		updaters[i](&c)
 
 		if err = withTransaction.Update(&c); err != nil {
-			return err
+			return fmt.Errorf("db update err: %w", err)
 		}
 	}
 

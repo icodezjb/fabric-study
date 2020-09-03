@@ -17,20 +17,20 @@ const blockInterval = 2 * time.Second
 type BlockSync struct {
 	blockNum     uint64
 	filterEvents map[string]struct{}
-	client       client.FabricClient
+	fClient      client.FabricClient
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
 	safeClose    sync.Once
 	preTxsCh     chan []*PrepareCrossTx
-	txMgr        *TxManager
+	txm          *TxManager
 	errCh        chan error
 
 	//for test
 	syncTestHook func([]*CrossTx)
 }
 
-func NewBlockSync(c client.FabricClient, txMgr *TxManager) *BlockSync {
-	startNum := txMgr.Get("number")
+func NewBlockSync(c client.FabricClient, txm *TxManager) *BlockSync {
+	startNum := txm.Get("number")
 	if startNum == 0 {
 		// skip genesis
 		startNum = 1
@@ -39,11 +39,11 @@ func NewBlockSync(c client.FabricClient, txMgr *TxManager) *BlockSync {
 	s := &BlockSync{
 		blockNum:     startNum,
 		filterEvents: make(map[string]struct{}),
-		client:       c,
+		fClient:      c,
 		stopCh:       make(chan struct{}),
 		preTxsCh:     make(chan []*PrepareCrossTx),
 		errCh:        make(chan error),
-		txMgr:        txMgr,
+		txm:          txm,
 	}
 
 	for _, ev := range c.FilterEvents() {
@@ -103,12 +103,12 @@ func (s *BlockSync) syncBlock() {
 		select {
 		case <-blockTimer.C:
 			log.Debug("[BlockSync] sync block", "blockNumber", s.blockNum)
-			if err := s.txMgr.Set("number", s.blockNum); err != nil {
+			if err := s.txm.Set("number", s.blockNum); err != nil {
 				apply(err)
 				break
 			}
 
-			block, err := s.client.QueryBlockByNum(s.blockNum)
+			block, err := s.fClient.QueryBlockByNum(s.blockNum)
 			if err != nil {
 				apply(err)
 				break
@@ -181,7 +181,7 @@ func (s *BlockSync) processPreTxs() {
 				break
 			}
 
-			if err := s.txMgr.AddTxs(crossTxs); err != nil {
+			if err := s.txm.AddCrossTxs(crossTxs); err != nil {
 				log.Error("[BlockSync] processPreTxs", "err", err)
 				s.errCh <- err
 				break

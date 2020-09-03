@@ -29,12 +29,20 @@ const (
 	defaultPeerURL     = ""
 
 	ConfigFileFlag        = "config"
-	configFileDescription = "The path of the config.yaml file"
+	configFileDescription = "The path of the config.yaml file needed by fabric-sdk-go"
 	defaultConfigFile     = ""
 
 	filterEventFlag        = "events"
 	filterEventDescription = "A comma-separated list of the specified events which are in the fabric blocks, e.g. 'precommit, commit'"
 	defaultFilterEvent     = "precommit,commit"
+
+	HTTPEndpointFlag            = "endpoint"
+	HTTPEndpointFlagDescription = "The courier http server listening, e.g. 'localhost:8080'"
+	defaultHTTPEndpointFlag     = "localhost:8080"
+
+	DataDirFlag            = "datadir"
+	DataDirFlagDescription = "The courier data directory"
+	defaultDataDirFlag     = "./courier_data"
 )
 
 type options struct {
@@ -45,9 +53,13 @@ type options struct {
 	User        string
 	ChannelID   string
 	ChainCodeID string
+
+	HTTPEndpoint string
+	DataDir      string
 }
 
 type Config struct {
+	// fabric client config
 	core.ConfigProvider
 	channel.RequestOption
 	FilterEvents []string
@@ -83,6 +95,16 @@ func InitConfigFile(flags *pflag.FlagSet) {
 // InitFilterEvents initializes the filter events from the provided arguments
 func InitFilterEvents(flags *pflag.FlagSet) {
 	flags.StringVar(&opts.events, filterEventFlag, defaultFilterEvent, filterEventDescription)
+}
+
+// HTTPEndpoint initializes the courier http server listening from the provided arguments
+func InitHTTPEndpoint(flags *pflag.FlagSet) {
+	flags.StringVar(&opts.HTTPEndpoint, HTTPEndpointFlag, defaultHTTPEndpointFlag, HTTPEndpointFlagDescription)
+}
+
+// InitDataDir initializes the courier data directory from the provided arguments
+func InitDataDir(flags *pflag.FlagSet) {
+	flags.StringVar(&opts.DataDir, DataDirFlag, defaultDataDirFlag, DataDirFlagDescription)
 }
 
 func peerURLs() []string {
@@ -148,7 +170,7 @@ func (c *Config) ChannelID() string {
 	return opts.ChannelID
 }
 
-// ChaincodeID returns the chaicode ID
+// ChainCodeID returns the chaicode ID
 func (c *Config) ChainCodeID() string {
 	if opts.ChannelID == "" {
 		utils.Fatalf("[Config] ccid not set")
@@ -160,4 +182,14 @@ func (c *Config) ChainCodeID() string {
 // PeerURLs returns a list of peer URLs
 func (c *Config) PeerURLs() []string {
 	return peerURLs()
+}
+
+// ServerURL returns the courier http server url
+func (c *Config) HTTPEndpoint() string {
+	return opts.HTTPEndpoint
+}
+
+// DataDir returns the courier data directory
+func (c *Config) DataDir() string {
+	return opts.DataDir
 }

@@ -1,18 +1,21 @@
 package courier
 
 import (
+	"fmt"
+	"net/http"
+	"strconv"
 	"sync"
 
-	"github.com/asdine/storm/v3"
 	"github.com/icodezjb/fabric-study/courier/client"
 	"github.com/icodezjb/fabric-study/log"
+
+	"github.com/asdine/storm/v3"
 )
 
 type Handler struct {
-	fabCli  client.FabricClient
 	blkSync *BlockSync
 	rootDB  *storm.DB
-	txMgr   *TxManager
+	txm     *TxManager
 	server  *Server
 
 	taskWg sync.WaitGroup
@@ -21,9 +24,9 @@ type Handler struct {
 }
 
 func New(cfg *client.Config) (*Handler, error) {
-	fabCli := client.New(cfg)
+	fabCli := client.NewFabCli(cfg)
 
-	rootDB, err := OpenStormDB("rootdb")
+	rootDB, err := OpenStormDB(cfg.DataDir())
 	if err != nil {
 		return nil, err
 	}
@@ -33,108 +36,79 @@ func New(cfg *client.Config) (*Handler, error) {
 		return nil, err
 	}
 
-	txMrg := NewTxManager(store)
+	txm := NewTxManager(fabCli, &client.MockOutChainClient{}, store)
 	h := &Handler{
-		fabCli:  fabCli,
-		blkSync: NewBlockSync(fabCli, txMrg),
+		blkSync: NewBlockSync(fabCli, txm),
 		rootDB:  rootDB,
-		txMgr:   txMrg,
+		txm:     txm,
 		stopCh:  make(chan struct{}),
 	}
 
-	h.server = NewServer("8080", h)
+	h.server = NewServer(cfg.HTTPEndpoint(), h)
 
 	return h, nil
 }
 
 func (h *Handler) Start() {
-	h.txMgr.Start()
+	h.txm.Start()
 	h.blkSync.Start()
-
-	h.processReq()
-
 	h.server.Start()
-
 }
 
 func (h *Handler) Stop() {
 	h.blkSync.Stop()
+	h.server.Stop()
 
 	close(h.stopCh)
 	h.taskWg.Wait()
 
-	h.fabCli.Close()
-	h.txMgr.Stop()
+	h.txm.Stop()
 
 	h.rootDB.Close()
 }
 
-func (h *Handler) RecvMsg(req Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	code, msg := http.StatusOK, ""
+
+	switch req.URL.Path {
+	case "/v1/receipt":
+		if req.Method != "POST" {
+			code, msg = http.StatusBadRequest, "support POST request only"
+			break
+		}
+
+		crossID := req.PostFormValue("crossID")
+		receipt := req.PostFormValue("receipt")
+		sequence := req.PostFormValue("sequence")
+
+		//TODO check crossID, receipt, sequence
+		seq, _ := strconv.Atoi(sequence)
+
+		h.RecvMsg(CrossTxReceipt{crossID, receipt, int64(seq)})
+	default:
+		code = http.StatusNotFound
+		msg = fmt.Sprintf("%s not found\n", req.URL.Path)
+	}
+
+	w.WriteHeader(code)
+	if _, err := w.Write([]byte(msg)); err != nil {
+		log.Error("[Server] serve http", "err", err)
+	}
+}
+
+func (h *Handler) RecvMsg(ctr CrossTxReceipt) {
 	h.taskWg.Add(1)
 	go func() {
 		defer h.taskWg.Done()
 
-		h.txMgr.executed.mu.Lock()
-		h.txMgr.executed.prq.Push(req, -req.Sequence)
-		h.txMgr.executed.mu.Unlock()
+		h.txm.executed.mu.Lock()
+		h.txm.executed.prq.Push(ctr, -ctr.Sequence)
+		h.txm.executed.mu.Unlock()
 
 		select {
-		case h.txMgr.executed.process <- struct{}{}:
+		case h.txm.executed.process <- struct{}{}:
 		case <-h.stopCh:
 			return
 		}
 	}()
-}
-
-func (h *Handler) processReq() {
-	log.Info("[ProcessReq] started")
-	h.taskWg.Add(1)
-	go func() {
-		defer h.taskWg.Done()
-
-		for {
-			select {
-			case <-h.txMgr.executed.process:
-				var executed = make([]Request, 0)
-
-				h.txMgr.executed.mu.Lock()
-				for !h.txMgr.executed.prq.Empty() {
-					item, _ := h.txMgr.executed.prq.Pop()
-					req := item.(Request)
-					executed = append(executed, req)
-				}
-				h.txMgr.executed.mu.Unlock()
-
-				if err := h.txMgr.HandleReceipts(executed); err != nil {
-					log.Warn("[TxManager] handle receipt", "err", err)
-
-					for _, req := range executed {
-						h.txMgr.executed.prq.Push(req, -req.Sequence)
-					}
-				}
-
-				log.Info("[TxManager] update Pending to Executed", "len(successList)", len(executed))
-
-				h.taskWg.Add(1)
-				go func() {
-					h.taskWg.Done()
-
-					for _, req := range executed {
-						_, err := h.fabCli.InvokeChainCode("commit", []string{req.CrossID, req.Receipt})
-						if err != nil {
-							log.Error("[ProcessReq] send tx to fabric", "InvokeChainCode err", err)
-						}
-
-						h.txMgr.executed.prq.Push(req, -req.Sequence)
-					}
-				}()
-
-			case <-h.stopCh:
-				return
-			}
-		}
-
-		log.Info("[ProcessReq] stopped")
-	}()
-
 }
