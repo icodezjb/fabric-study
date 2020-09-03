@@ -20,6 +20,7 @@ type BlockSync struct {
 	client       client.FabricClient
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
+	safeClose    sync.Once
 	preTxsCh     chan []*PrepareCrossTx
 	txMgr        *TxManager
 	errCh        chan error
@@ -69,7 +70,11 @@ func (s *BlockSync) Start() {
 
 func (s *BlockSync) Stop() {
 	log.Info("[BlockSync] stopping")
-	close(s.stopCh)
+
+	s.safeClose.Do(func() {
+		close(s.stopCh)
+	})
+
 	s.wg.Wait()
 	log.Info("[BlockSync] stopped")
 }
@@ -90,7 +95,7 @@ func (s *BlockSync) syncBlock() {
 			blockTimer.Reset(blockInterval)
 		default:
 			log.Error("[BlockSync] sync block err: %v", err)
-			s.Stop()
+			go s.Stop()
 		}
 	}
 

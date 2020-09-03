@@ -26,7 +26,7 @@ func TestPrecommitContract(t *testing.T) {
 	}
 }
 
-func TestCommitedContract(t *testing.T) {
+func TestCommitContract(t *testing.T) {
 	commit := CommitContract{Status: Finished}
 
 	contract := Contract{&commit}

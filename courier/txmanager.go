@@ -13,7 +13,7 @@ import (
 
 type CrossTx struct {
 	contractlib.Contract
-	PK          uint64               `storm:"id,increment"`
+	PK          int64                `storm:"id,increment"`
 	CrossID     string               `storm:"unique"`
 	TxID        string               `storm:"index"`
 	BlockNumber uint64               `storm:"index"`
@@ -44,7 +44,7 @@ func (c *CrossTx) UnmarshalJSON(bytes []byte) (err error) {
 }
 
 type Prqueue struct {
-	pr      *prque.Prque
+	prq     *prque.Prque
 	process chan struct{}
 	mu      sync.Mutex
 }
@@ -72,8 +72,8 @@ func NewTxManager(db DB) *TxManager {
 	return &TxManager{
 		DB:       db,
 		stopCh:   make(chan struct{}),
-		pending:  Prqueue{pr: prque.New(nil), process: make(chan struct{}, 4)},
-		executed: Prqueue{pr: prque.New(nil), process: make(chan struct{}, 4)},
+		pending:  Prqueue{prq: prque.New(nil), process: make(chan struct{}, 4)},
+		executed: Prqueue{prq: prque.New(nil), process: make(chan struct{}, 8)},
 		sClient:  &mockSimplechain{},
 	}
 }
@@ -100,7 +100,7 @@ func (t *TxManager) reload() {
 
 	t.pending.mu.Lock()
 	for _, tx := range toPending {
-		t.pending.pr.Push(tx, -tx.TimeStamp.Seconds)
+		t.pending.prq.Push(tx, -tx.TimeStamp.Seconds)
 	}
 	t.pending.mu.Unlock()
 
@@ -115,7 +115,7 @@ func (t *TxManager) AddTxs(txs []*CrossTx) error {
 	t.pending.mu.Lock()
 	for _, tx := range txs {
 		if tx.Contract.GetStatus() != contractlib.Finished {
-			t.pending.pr.Push(tx, -tx.TimeStamp.Seconds)
+			t.pending.prq.Push(tx, -tx.TimeStamp.Seconds)
 		}
 	}
 	t.pending.mu.Unlock()
@@ -126,7 +126,9 @@ func (t *TxManager) AddTxs(txs []*CrossTx) error {
 	}
 
 	// start send
-	t.pending.process <- struct{}{}
+	if t.pending.prq.Size() != 0 {
+		t.pending.process <- struct{}{}
+	}
 
 	return nil
 }
@@ -140,8 +142,8 @@ func (t *TxManager) loop() {
 			var pending = make([]*CrossTx, 0)
 
 			t.pending.mu.Lock()
-			for !t.pending.pr.Empty() {
-				item, _ := t.pending.pr.Pop()
+			for !t.pending.prq.Empty() {
+				item, _ := t.pending.prq.Pop()
 				tx := item.(*CrossTx)
 				pending = append(pending, tx)
 			}
@@ -149,6 +151,7 @@ func (t *TxManager) loop() {
 
 			successList := make([]string, 0)
 			updaters := make([]func(c *CrossTx), 0)
+
 			for _, tx := range pending {
 				raw, err := json.Marshal(tx)
 				if err != nil {
@@ -156,8 +159,10 @@ func (t *TxManager) loop() {
 					continue
 				}
 
+				// TODO: batch send, MaxBatchSize = 64
 				if err := t.sClient.Send(raw); err != nil {
 					log.Error("[TxManager] SendToSimpleChain crossID=%s, status=%v, err=%v", tx.CrossID, tx.GetStatus(), err)
+					t.pending.prq.Push(tx, -tx.TimeStamp.Seconds)
 					continue
 				}
 
@@ -179,4 +184,24 @@ func (t *TxManager) loop() {
 			return
 		}
 	}
+}
+
+func (t *TxManager) HandleReceipts(reqs []Request) error {
+	var updaters []func(c *CrossTx)
+	var ids []string
+
+	for _, req := range reqs {
+		ids = append(ids, req.CrossID)
+		updaters = append(updaters, func(c *CrossTx) {
+			c.UpdateStatus(contractlib.Executed)
+			pc, ok := c.IContract.(*contractlib.PrecommitContract)
+			if ok {
+				pc.UpdateReceipt(req.Receipt)
+			}
+		})
+	}
+
+	log.Debug("[TxManager] HandleReceipt  ids: %v", ids)
+
+	return t.DB.Updates(ids, updaters)
 }

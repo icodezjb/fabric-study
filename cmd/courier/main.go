@@ -28,14 +28,14 @@ func main() {
 
 			h.Start()
 
-			log.Info("courier service start")
+			log.Info("courier service started")
 			interrupt := make(chan os.Signal, 1)
 			signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
 			defer signal.Stop(interrupt)
 			<-interrupt
 
 			h.Stop()
-			log.Info("courier service stop")
+			log.Info("courier service stopped")
 		},
 	}
 

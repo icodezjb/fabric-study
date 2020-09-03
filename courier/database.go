@@ -79,13 +79,15 @@ func (s *Store) Save(txList []*CrossTx) error {
 				return err
 			}
 		} else if old.IContract == nil {
-			log.Warn("[store] parse old crossTx failed, crossID = %s", old.CrossID)
-		} else if old.GetStatus() == contractlib.Executed && new.GetStatus() == contractlib.Finished {
-			log.Debug("[Store] complete crossTx: crossID = %s, txId = %s", new.CrossID, new.TxID)
-			new.UpdateStatus(contractlib.Completed)
-			if err = withTransaction.Update(new); err != nil {
+			log.Warn("[Store] parse old crossTx failed, crossID = %s", old.CrossID)
+		} else if new.GetStatus() == contractlib.Finished {
+			log.Debug("[Store] to update Completed: crossID = %s, txId = %s", new.CrossID, new.TxID)
+			// update old status, discard new
+			old.UpdateStatus(contractlib.Completed)
+			if err = withTransaction.Update(&old); err != nil {
 				return err
 			}
+
 		} else {
 			log.Warn("[Store] duplicate crossTx: crossID = %s, old.status = %v, new.status = %v", new.CrossID, old.GetStatus(), new.GetStatus())
 			continue
