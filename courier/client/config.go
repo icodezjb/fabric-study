@@ -87,7 +87,7 @@ func InitFilterEvents(flags *pflag.FlagSet) {
 
 func peerURLs() []string {
 	if opts.peerUrl == "" {
-		utils.Fatalf("peer not set")
+		utils.Fatalf("[Config] peer not set")
 	}
 
 	var urls []string
@@ -103,7 +103,7 @@ func peerURLs() []string {
 
 func filterEvents() []string {
 	if opts.events == "" {
-		utils.Fatalf("filter events not set")
+		utils.Fatalf("[Config] filter events not set")
 	}
 
 	var filterEvents []string
@@ -133,7 +133,7 @@ func InitConfig() *Config {
 // InitUserName initializes the user name from the provided arguments
 func (c *Config) UserName() string {
 	if opts.User == "" {
-		utils.Fatalf("user not set")
+		utils.Fatalf("[Config] user not set")
 	}
 
 	return opts.User
@@ -142,7 +142,7 @@ func (c *Config) UserName() string {
 // ChannelID returns the channel ID
 func (c *Config) ChannelID() string {
 	if opts.User == "" {
-		utils.Fatalf("cid not set")
+		utils.Fatalf("[Config] cid not set")
 	}
 
 	return opts.ChannelID
@@ -151,7 +151,7 @@ func (c *Config) ChannelID() string {
 // ChaincodeID returns the chaicode ID
 func (c *Config) ChainCodeID() string {
 	if opts.ChannelID == "" {
-		utils.Fatalf("ccid not set")
+		utils.Fatalf("[Config] ccid not set")
 	}
 
 	return opts.ChainCodeID

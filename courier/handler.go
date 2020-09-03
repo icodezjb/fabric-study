@@ -106,12 +106,14 @@ func (h *Handler) processReq() {
 				h.txMgr.executed.mu.Unlock()
 
 				if err := h.txMgr.HandleReceipts(executed); err != nil {
-					log.Warn("[TxManager] HandleReceipt err: %v", err)
+					log.Warn("[TxManager] handle receipt", "err", err)
 
 					for _, req := range executed {
 						h.txMgr.executed.prq.Push(req, -req.Sequence)
 					}
 				}
+
+				log.Info("[TxManager] update Pending to Executed", "len(successList)", len(executed))
 
 				h.taskWg.Add(1)
 				go func() {
@@ -120,8 +122,10 @@ func (h *Handler) processReq() {
 					for _, req := range executed {
 						_, err := h.fabCli.InvokeChainCode("commit", []string{req.CrossID, req.Receipt})
 						if err != nil {
-							log.Warn("[ProcessReq] InvokeChainCode err: %v", err)
+							log.Error("[ProcessReq] send tx to fabric", "InvokeChainCode err", err)
 						}
+
+						h.txMgr.executed.prq.Push(req, -req.Sequence)
 					}
 				}()
 

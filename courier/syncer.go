@@ -53,7 +53,7 @@ func NewBlockSync(c client.FabricClient, txMgr *TxManager) *BlockSync {
 		case "commit":
 			s.filterEvents[ev] = struct{}{}
 		default:
-			log.Crit(fmt.Sprintf("unsupported filter event type: %s", ev))
+			log.Crit(fmt.Sprintf("[Syncer] unsupported filter event type: %s", ev))
 		}
 	}
 
@@ -90,11 +90,11 @@ func (s *BlockSync) syncBlock() {
 		case strings.Contains(err.Error(), "Entry not found in index"):
 			blockTimer.Reset(blockInterval)
 		case strings.Contains(err.Error(), "ignore"):
-			log.Debug("[BlockSync] sync %v", err)
+			log.Debug(fmt.Sprintf("[BlockSync] handle %v", err))
 			s.blockNum++
 			blockTimer.Reset(blockInterval)
 		default:
-			log.Error("[BlockSync] sync block err: %v", err)
+			log.Error("[BlockSync] sync block", "err", err)
 			go s.Stop()
 		}
 	}
@@ -102,7 +102,7 @@ func (s *BlockSync) syncBlock() {
 	for {
 		select {
 		case <-blockTimer.C:
-			log.Debug("[BlockSync] sync block #%d", s.blockNum)
+			log.Debug("[BlockSync] sync block", "blockNumber", s.blockNum)
 			if err := s.txMgr.Set("number", s.blockNum); err != nil {
 				apply(err)
 				break
@@ -158,7 +158,7 @@ func (s *BlockSync) processPreTxs() {
 				var c contractlib.Contract
 				err := json.Unmarshal(tx.Payload, &c)
 				if err != nil {
-					log.Error("[BlockSync] ProcessPreTxs parse Contract event: %s, err: %v", tx.EventName, err)
+					log.Error("[BlockSync] processPreTxs parse Contract", " event", tx.EventName, "err", err)
 					s.errCh <- err
 					break
 				}
@@ -174,7 +174,7 @@ func (s *BlockSync) processPreTxs() {
 				crossTxs = append(crossTxs[:i], crossTx)
 			}
 
-			log.Debug("[BlockSync] len(crossTxs): %v", len(crossTxs))
+			log.Debug("[BlockSync] processPreTxs", "len(crossTxs)", len(crossTxs))
 
 			if s.syncTestHook != nil {
 				s.syncTestHook(crossTxs)
@@ -182,7 +182,7 @@ func (s *BlockSync) processPreTxs() {
 			}
 
 			if err := s.txMgr.AddTxs(crossTxs); err != nil {
-				log.Error("[BlockSync] processPreTxs err: %v", err)
+				log.Error("[BlockSync] processPreTxs", "err", err)
 				s.errCh <- err
 				break
 			}

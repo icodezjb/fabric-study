@@ -3,94 +3,75 @@ package log
 import (
 	"fmt"
 	"os"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-stack/stack"
 )
 
+const timeKey = "t"
+const lvlKey = "lvl"
+const msgKey = "msg"
+const ctxKey = "ctx"
+const errorKey = "LOG15_ERROR"
 const skipLevel = 2
-
-// swapHandler wraps another handler that may be swapped out
-// dynamically at runtime in a thread-safe fashion.
-type swapHandler struct {
-	handler atomic.Value
-}
-
-func (h *swapHandler) Log(r *Record) error {
-	return (*h.handler.Load().(*Handler)).Log(r)
-}
-
-func (h *swapHandler) Swap(newHandler Handler) {
-	h.handler.Store(&newHandler)
-}
-
-func (h *swapHandler) Get() Handler {
-	return *h.handler.Load().(*Handler)
-}
 
 type Lvl int
 
 const (
-	LvlAll Lvl = iota
-	LvlDebug
-	LvlInfo
-	LvlWarn
+	LvlCrit Lvl = iota
 	LvlError
-	LvlOff
-	LvlCrit
+	LvlWarn
+	LvlInfo
+	LvlDebug
+	LvlTrace
 )
 
 // AlignedString returns a 5-character string containing the name of a Lvl.
 func (l Lvl) AlignedString() string {
 	switch l {
-	case LvlAll:
-		return "all"
+	case LvlTrace:
+		return "TRACE"
 	case LvlDebug:
-		return "debug"
+		return "DEBUG"
 	case LvlInfo:
-		return "info"
+		return "INFO "
 	case LvlWarn:
-		return "warn"
+		return "WARN "
 	case LvlError:
-		return "error"
-	case LvlOff:
-		return "off"
+		return "ERROR"
 	case LvlCrit:
-		return "crit"
+		return "CRIT "
 	default:
-		panic("Unknown level")
+		panic("bad level")
 	}
 }
 
 // Strings returns the name of a Lvl.
 func (l Lvl) String() string {
 	switch l {
-	case LvlAll:
-		return "all   "
+	case LvlTrace:
+		return "trce"
 	case LvlDebug:
-		return "debug "
+		return "dbug"
 	case LvlInfo:
-		return "info  "
+		return "info"
 	case LvlWarn:
-		return "warn  "
+		return "warn"
 	case LvlError:
-		return "error "
-	case LvlOff:
-		return "off   "
+		return "eror"
 	case LvlCrit:
-		return "lvlcrit"
+		return "crit"
 	default:
-		panic("Unknown level")
+		panic("bad level")
 	}
 }
 
-//LvlFromString returns the appropriate Lvl from a string name.
-//Useful for parsing command line args and configuration files.
+// LvlFromString returns the appropriate Lvl from a string name.
+// Useful for parsing command line args and configuration files.
 func LvlFromString(lvlString string) (Lvl, error) {
 	switch lvlString {
-	case "all":
-		return LvlAll, nil
+	case "trace", "trce":
+		return LvlTrace, nil
 	case "debug", "dbug":
 		return LvlDebug, nil
 	case "info":
@@ -99,32 +80,35 @@ func LvlFromString(lvlString string) (Lvl, error) {
 		return LvlWarn, nil
 	case "error", "eror":
 		return LvlError, nil
-	case "off":
-		return LvlOff, nil
 	case "crit":
 		return LvlCrit, nil
 	default:
-		return LvlDebug, fmt.Errorf("Unknown level: %v", lvlString)
+		return LvlDebug, fmt.Errorf("unknown level: %v", lvlString)
 	}
 }
 
 // A Record is what a Logger asks its handler to write
 type Record struct {
-	Name string
-	Time time.Time
-	Lvl  Lvl
-	Msg  string
-	Call stack.Call
+	Time     time.Time
+	Lvl      Lvl
+	Msg      string
+	Ctx      []interface{}
+	Call     stack.Call
+	KeyNames RecordKeyNames
 }
 
-func (r Record) String() string {
-	return r.Call.String()
+// RecordKeyNames gets stored in a Record when the write function is executed.
+type RecordKeyNames struct {
+	Time string
+	Msg  string
+	Lvl  string
+	Ctx  string
 }
 
 // A Logger writes key/value pairs to a Handler
 type Logger interface {
 	// New returns a new Logger that has this logger's context plus the given context
-	New(name string) Logger
+	New(ctx ...interface{}) Logger
 
 	// GetHandler gets the handler associated with the logger.
 	GetHandler() Handler
@@ -132,75 +116,101 @@ type Logger interface {
 	// SetHandler updates the logger to write records to the specified handler.
 	SetHandler(h Handler)
 
-	// SetEnable enable output without handler.
-	SetEnable(e bool)
-
 	// Log a message at the given level with context key/value pairs
-	Debug(format string, arg ...interface{})
-	Info(format string, arg ...interface{})
-	Warn(format string, arg ...interface{})
-	Error(format string, arg ...interface{})
-	Crit(format string, arg ...interface{})
+	Trace(msg string, ctx ...interface{})
+	Debug(msg string, ctx ...interface{})
+	Info(msg string, ctx ...interface{})
+	Warn(msg string, ctx ...interface{})
+	Error(msg string, ctx ...interface{})
+	Crit(msg string, ctx ...interface{})
 }
 
 type logger struct {
-	name   string
-	h      *swapHandler
-	enable bool
+	ctx []interface{}
+	h   *swapHandler
 }
 
-func (l *logger) New(name string) Logger {
-	child := &logger{name: name, h: new(swapHandler), enable: true}
+func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
+	l.h.Log(&Record{
+		Time: time.Now(),
+		Lvl:  lvl,
+		Msg:  msg,
+		Ctx:  newContext(l.ctx, ctx),
+		Call: stack.Caller(skip),
+		KeyNames: RecordKeyNames{
+			Time: timeKey,
+			Msg:  msgKey,
+			Lvl:  lvlKey,
+			Ctx:  ctxKey,
+		},
+	})
+}
+
+func (l *logger) New(ctx ...interface{}) Logger {
+	child := &logger{newContext(l.ctx, ctx), new(swapHandler)}
 	child.SetHandler(l.h)
 	return child
 }
-func (l *logger) SetEnable(e bool) {
-	l.enable = e
-}
-func (l *logger) Debug(format string, arg ...interface{}) {
-	if l != nil && l.enable {
-		l.write(LvlDebug, fmt.Sprintf(format, arg...), skipLevel)
-	}
-}
-func (l *logger) Info(format string, arg ...interface{}) {
-	if l != nil && l.enable {
-		l.write(LvlInfo, fmt.Sprintf(format, arg...), skipLevel)
-	}
+
+func newContext(prefix []interface{}, suffix []interface{}) []interface{} {
+	normalizedSuffix := normalize(suffix)
+	newCtx := make([]interface{}, len(prefix)+len(normalizedSuffix))
+	n := copy(newCtx, prefix)
+	copy(newCtx[n:], normalizedSuffix)
+	return newCtx
 }
 
-func (l *logger) Warn(format string, arg ...interface{}) {
-	if l != nil && l.enable {
-		l.write(LvlWarn, fmt.Sprintf(format, arg...), skipLevel)
-	}
-}
-func (l *logger) Error(format string, arg ...interface{}) {
-	if l != nil && l.enable {
-		l.write(LvlError, fmt.Sprintf(format, arg...), skipLevel)
-	}
+func (l *logger) Trace(msg string, ctx ...interface{}) {
+	l.write(msg, LvlTrace, ctx, skipLevel)
 }
 
-func (l *logger) Crit(format string, arg ...interface{}) {
-	if l != nil && l.enable {
-		l.write(LvlCrit, fmt.Sprintf(format, arg...), skipLevel)
-		os.Exit(1)
-	}
+func (l *logger) Debug(msg string, ctx ...interface{}) {
+	l.write(msg, LvlDebug, ctx, skipLevel)
+}
+
+func (l *logger) Info(msg string, ctx ...interface{}) {
+	l.write(msg, LvlInfo, ctx, skipLevel)
+}
+
+func (l *logger) Warn(msg string, ctx ...interface{}) {
+	l.write(msg, LvlWarn, ctx, skipLevel)
+}
+
+func (l *logger) Error(msg string, ctx ...interface{}) {
+	l.write(msg, LvlError, ctx, skipLevel)
+}
+
+func (l *logger) Crit(msg string, ctx ...interface{}) {
+	l.write(msg, LvlCrit, ctx, skipLevel)
+	os.Exit(1)
 }
 
 func (l *logger) GetHandler() Handler {
 	return l.h.Get()
 }
+
 func (l *logger) SetHandler(h Handler) {
 	l.h.Swap(h)
 }
 
-func (l *logger) write(lvl Lvl, msg string, skip int) {
-	_ = l.h.Log(&Record{
-		Name: l.name,
-		Time: time.Now(),
-		Lvl:  lvl,
-		Msg:  msg,
-		Call: stack.Caller(skip),
-	})
+func normalize(ctx []interface{}) []interface{} {
+	// if the caller passed a Ctx object, then expand it
+	if len(ctx) == 1 {
+		if ctxMap, ok := ctx[0].(Ctx); ok {
+			ctx = ctxMap.toArray()
+		}
+	}
+
+	// ctx needs to be even because it's a series of key/value pairs
+	// no one wants to check for errors on logging functions,
+	// so instead of erroring on bad input, we'll just make sure
+	// that things are the right length and users can fix bugs
+	// when they see the output looks wrong
+	if len(ctx)%2 != 0 {
+		ctx = append(ctx, nil, errorKey, "Normalized odd number of arguments by adding nil")
+	}
+
+	return ctx
 }
 
 // Lazy allows you to defer calculation of a logged value that is expensive
@@ -214,4 +224,22 @@ func (l *logger) write(lvl Lvl, msg string, skip int) {
 // number of values of any type.
 type Lazy struct {
 	Fn interface{}
+}
+
+// Ctx is a map of key/value pairs to pass as context to a log function
+// Use this only if you really need greater safety around the arguments you pass
+// to the logging functions.
+type Ctx map[string]interface{}
+
+func (c Ctx) toArray() []interface{} {
+	arr := make([]interface{}, len(c)*2)
+
+	i := 0
+	for k, v := range c {
+		arr[i] = k
+		arr[i+1] = v
+		i += 2
+	}
+
+	return arr
 }

@@ -25,7 +25,7 @@ func (ta transactionActions) toFilteredActions() (*peer.FilteredTransaction_Tran
 		}
 
 		if chaincodeActionPayload.Action == nil {
-			log.Debug("chaincode action, the payload action is nil, skipping")
+			log.Debug("[Filter] chaincode action, the payload action is nil, skipping")
 			continue
 		}
 		propRespPayload, err := utils.GetProposalResponsePayload(chaincodeActionPayload.Action.ProposalResponsePayload)
@@ -128,7 +128,7 @@ func GetPrepareCrossTxs(block *common.Block, filterFunc func(string) bool) (preC
 	}
 
 	if len(preCrossTxs) == 0 {
-		return nil, fmt.Errorf("ignore %d block", blockNum)
+		return nil, fmt.Errorf("ignore block %d", blockNum)
 	}
 
 	return preCrossTxs, nil

@@ -61,7 +61,7 @@ func (s *Store) Get(key string) uint64 {
 }
 
 func (s *Store) Save(txList []*CrossTx) error {
-	log.Debug("[Store] to save %d cross txs", len(txList))
+	log.Debug("[Store] to save cross txs", "len(txList)", len(txList))
 
 	withTransaction, err := s.db.Begin(true)
 	if err != nil {
@@ -69,27 +69,27 @@ func (s *Store) Save(txList []*CrossTx) error {
 	}
 	defer withTransaction.Rollback()
 
-	for _, new := range txList {
-		var old CrossTx
-		err = withTransaction.One(CrossIdIndex, new.CrossID, &old)
+	for _, newTx := range txList {
+		var oldTx CrossTx
+		err = withTransaction.One(CrossIdIndex, newTx.CrossID, &oldTx)
 
 		if err == storm.ErrNotFound {
-			log.Debug("[Store] crossID = %s, status = %v, blockNumber = %d", new.CrossID, new.GetStatus(), new.BlockNumber)
-			if err = withTransaction.Save(new); err != nil {
+			log.Debug("[Store] save new cross tx", "crossID", newTx.CrossID, "status", newTx.GetStatus(), "blockNumber", newTx.BlockNumber)
+			if err = withTransaction.Save(newTx); err != nil {
 				return err
 			}
-		} else if old.IContract == nil {
-			log.Warn("[Store] parse old crossTx failed, crossID = %s", old.CrossID)
-		} else if new.GetStatus() == contractlib.Finished {
-			log.Debug("[Store] to update Completed: crossID = %s, txId = %s", new.CrossID, new.TxID)
+		} else if oldTx.IContract == nil {
+			log.Warn("[Store] parse old crossTx failed", "crossID", oldTx.CrossID)
+		} else if newTx.GetStatus() == contractlib.Finished {
+			log.Debug("[Store] to update Finished to Completed", "crossID", newTx.CrossID, "txId", newTx.TxID)
 			// update old status, discard new
-			old.UpdateStatus(contractlib.Completed)
-			if err = withTransaction.Update(&old); err != nil {
+			oldTx.UpdateStatus(contractlib.Completed)
+			if err = withTransaction.Update(&oldTx); err != nil {
 				return err
 			}
-
+			log.Info("[Store] update Finished to Completed, cross chain completed", "crossID", newTx.CrossID, "txId", newTx.TxID)
 		} else {
-			log.Warn("[Store] duplicate crossTx: crossID = %s, old.status = %v, new.status = %v", new.CrossID, old.GetStatus(), new.GetStatus())
+			log.Warn("[Store] duplicate crossTx", "crossID", newTx.CrossID, "old.status", oldTx.GetStatus(), "new.status", newTx.GetStatus())
 			continue
 		}
 	}
@@ -111,7 +111,7 @@ func (s *Store) Updates(idList []string, updaters []func(c *CrossTx)) error {
 		return fmt.Errorf("invalid update params")
 	}
 
-	log.Debug("[Store] update list: %v", idList)
+	log.Debug("[Store] update list", "idList", idList)
 
 	withTransaction, err := s.db.Begin(true)
 	if err != nil {
@@ -132,7 +132,7 @@ func (s *Store) Updates(idList []string, updaters []func(c *CrossTx)) error {
 		}
 	}
 
-	log.Debug("[Store] update %d cross txs", len(idList))
+	log.Debug("[Store] update list", "successes", len(idList))
 
 	return withTransaction.Commit()
 }

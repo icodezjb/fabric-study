@@ -36,7 +36,7 @@ func (s *Server) Start() {
 func (s *Server) serve() {
 	err := s.server.ListenAndServe()
 	if err != nil {
-		log.Crit("server run failed, err: %v", err)
+		log.Crit("[Server] server to run failed", "err", err)
 	}
 }
 
@@ -65,6 +65,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	w.WriteHeader(code)
 	if _, err := w.Write([]byte(msg)); err != nil {
-		log.Error("ServeHTTP error: %v", err)
+		log.Error("[Server] serve http", "err", err)
 	}
 }

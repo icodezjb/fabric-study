@@ -18,24 +18,27 @@ func main() {
 	var mainCmd = &cobra.Command{
 		Use: "courier",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+			glogger.Verbosity(log.LvlDebug)
+			log.Root().SetHandler(glogger)
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			h, err := courier.New(client.InitConfig())
 			if err != nil {
-				utils.Fatalf("courier init err: %v", err)
+				utils.Fatalf("[main] courier init err: %v", err)
 			}
 
 			h.Start()
 
-			log.Info("courier service started")
+			log.Info("[Main] courier service started")
 			interrupt := make(chan os.Signal, 1)
 			signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
 			defer signal.Stop(interrupt)
 			<-interrupt
 
 			h.Stop()
-			log.Info("courier service stopped")
+			log.Info("[Main] courier service stopped")
 		},
 	}
 

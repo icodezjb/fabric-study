@@ -55,7 +55,7 @@ type mockSimplechain struct {
 
 func (ms *mockSimplechain) Send([]byte) error {
 	ms.count++
-	log.Info("send to simplechain: %d", ms.count)
+	log.Info("send to simplechain", "count", ms.count)
 	return nil
 }
 
@@ -155,13 +155,13 @@ func (t *TxManager) loop() {
 			for _, tx := range pending {
 				raw, err := json.Marshal(tx)
 				if err != nil {
-					log.Error("[TxManager] SendToSimpleChain crossID=%s, status=%v, err=%v", tx.CrossID, tx.GetStatus(), err)
+					log.Error("[TxManager] marshal tx", "crossID", tx.CrossID, "status", tx.GetStatus(), "err", err)
 					continue
 				}
 
 				// TODO: batch send, MaxBatchSize = 64
 				if err := t.sClient.Send(raw); err != nil {
-					log.Error("[TxManager] SendToSimpleChain crossID=%s, status=%v, err=%v", tx.CrossID, tx.GetStatus(), err)
+					log.Error("[TxManager] send tx to out chain", "crossID", tx.CrossID, "status", tx.GetStatus(), "err", err)
 					t.pending.prq.Push(tx, -tx.TimeStamp.Seconds)
 					continue
 				}
@@ -174,11 +174,12 @@ func (t *TxManager) loop() {
 
 			go func() {
 				if err := t.DB.Updates(successList, updaters); err != nil {
+					log.Debug("[TxManager] update Init to Pending", "len(successList)", len(successList), "err", err)
 					panic(err)
-					//log.Crit("[TxManager] SendToSimpleChain update pending status, len(successList)=%d, err=%v",
-					//	len(successList), err)
 				}
 			}()
+
+			log.Info("[TxManager] update Init to Pending", "len(successList)", len(successList))
 
 		case <-t.stopCh:
 			return
@@ -201,7 +202,7 @@ func (t *TxManager) HandleReceipts(reqs []Request) error {
 		})
 	}
 
-	log.Debug("[TxManager] HandleReceipt  ids: %v", ids)
+	log.Debug("[TxManager] handle receipt", "ids", ids)
 
 	return t.DB.Updates(ids, updaters)
 }
