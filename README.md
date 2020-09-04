@@ -3,16 +3,22 @@
 
 - 六大组件
 
-
+    
     (1): syncer——通过fabric clietn同步相应的Block,解析出待处理的Transaction，并封装为CrossTx提交到txmanager
+    
     (2): txmanager——courier核心结构，主要功能是管理CrossTx
+    
     (3): database——由嵌入式关系型数据库Storm实现txmanager数据的存储
+    
     (4): outchain client——通过outchain client将CrossTx上传到outchain
+    
     (5): httpserver——接收outchain 返回的交易回执(如outchain的Txid)
+    
     (6): fabric client——通过fabric client 同步Block，并根据outchain的交易回执，发起fabric 合约交易。
 
 
 - 跨链交易状态
+
 ![crosstx state](./docs/picture/txstate.png)
 
 
