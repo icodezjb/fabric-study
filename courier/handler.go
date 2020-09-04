@@ -77,7 +77,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			break
 		}
 
-		crossID := req.PostFormValue("crossID")
+		crossID := req.PostFormValue("crossid")
 		receipt := req.PostFormValue("receipt")
 		sequence := req.PostFormValue("sequence")
 

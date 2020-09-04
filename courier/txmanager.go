@@ -2,6 +2,7 @@ package courier
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 
 	"github.com/icodezjb/fabric-study/courier/client"
@@ -9,6 +10,7 @@ import (
 	"github.com/icodezjb/fabric-study/courier/utils/prque"
 	"github.com/icodezjb/fabric-study/log"
 
+	"github.com/asdine/storm/v3"
 	"github.com/asdine/storm/v3/q"
 	"github.com/golang/protobuf/ptypes/timestamp"
 )
@@ -242,11 +244,17 @@ func (t *TxManager) ProcessCrossTxReceipts() {
 			t.executed.mu.Unlock()
 
 			if err := t.AddCrossTxReceipts(executed); err != nil {
+				if errors.Is(err, storm.ErrNotFound) {
+					log.Info("[TxManager] discard receipts", "receipts", executed)
+					break
+				}
+
 				log.Warn("[TxManager] handle receipt", "err", err)
 
 				for _, ctr := range executed {
 					t.executed.prq.Push(ctr, -ctr.Sequence)
 				}
+				break
 			}
 
 			log.Info("[TxManager] update Pending to Executed", "len(successList)", len(executed))
