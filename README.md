@@ -38,9 +38,10 @@
 
 #### 测试
 
-- (1)  启动fabric v1.4.2测试网.基于 [hyperledger fabric-samples](https://github.com/hyperledger/fabric-samples) v1.4.2
+- (1)  复制fabric 1.4.2 tools, 启动fabric v1.4.2测试网.基于 [hyperledger fabric-samples](https://github.com/hyperledger/fabric-samples) v1.4.2
 ```bash
 cd first-network
+sudo cp ./bin/* /usr/local/bin 
 ./byfn.sh up
 ```
   用`./byfn.sh down`关闭,更多功能`./byfn.sh --help`
